@@ -603,6 +603,8 @@ class MainWindow(QWidget):
             f"Done — {result.segment_count} Bengali cues {tail}.",
             "ok" if result.placed_on_timeline else "",
         )
+        if result.cache_summary:
+            self._append(result.cache_summary)
         if result.trim_summary:
             self._append(result.trim_summary)
         if result.repair_summary:
@@ -611,6 +613,7 @@ class MainWindow(QWidget):
             self._append(result.message)
         self._append(f"SRT saved to: {result.srt_path}")
         self._refresh_cache()
+        self._refresh_transcripts()
         self._teardown()
 
 
