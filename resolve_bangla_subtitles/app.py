@@ -40,6 +40,8 @@ import audio_trim
 import bn_srt
 import model_cache
 import pipeline
+import settings_store
+import transcript_cache
 from cancellation import CancelToken, Cancelled
 
 HERE = os.path.dirname(os.path.abspath(__file__))
