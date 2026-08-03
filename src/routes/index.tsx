@@ -44,21 +44,36 @@ const FEATURES = [
   },
   {
     kicker: "03",
+    title: "Download once, start instantly",
+    body: "Model weights are cached to disk with a real progress bar — cancellable and resumable — and kept warm in memory, so every run after the first begins immediately and fully offline.",
+  },
+  {
+    kicker: "04",
     title: "Bengali-aware line breaking",
     body: "Normalises dari (।), fixes punctuation spacing and never breaks a line before a matra, hasant or ZWJ — conjuncts stay intact and two-line cues stay balanced.",
   },
   {
-    kicker: "04",
+    kicker: "05",
+    title: "Automatic timing repair",
+    body: "A final pass sorts cues, merges duplicates and removes overlaps, zero-length and negative timestamps, so Resolve never receives an SRT it would reject or silently drop.",
+  },
+  {
+    kicker: "06",
+    title: "Silence trimming",
+    body: "Optionally strips leading and trailing room tone before transcription at an adjustable threshold, then adds the offset back so cues stay perfectly in sync with the timeline.",
+  },
+  {
+    kicker: "07",
     title: "Automatic timeline placement",
     body: "Creates a subtitle track when your timeline has none, appends the SRT to it, and falls back to ImportIntoTimeline on older builds. No dragging from the Media Pool.",
   },
   {
-    kicker: "05",
+    kicker: "08",
     title: "Cancel-safe at every stage",
     body: "Cancel stops the Resolve render, unwinds the decoder between segments and deletes partial files. The UI never freezes and no truncated SRT ever reaches your timeline.",
   },
   {
-    kicker: "06",
+    kicker: "09",
     title: "Private by construction",
     body: "No cloud APIs, no telemetry, no account. Audio and transcripts never leave the machine, and temporary WAV files are deleted after every run.",
   },

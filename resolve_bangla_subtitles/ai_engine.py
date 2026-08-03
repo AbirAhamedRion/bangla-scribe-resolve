@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Callable, Iterable, List, Optional
+from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
 import bn_srt
+import model_cache
 from cancellation import Cancelled, as_token
 
 
@@ -52,7 +53,17 @@ def pick_compute_settings(prefer_gpu: bool = True) -> tuple[str, str]:
 
 
 class Transcriber:
-    """Thin wrapper that keeps the loaded model warm between runs."""
+    """
+    Thin wrapper that keeps the loaded model warm between runs.
+
+    Two levels of caching are involved:
+
+      * **Disk** — weights are downloaded once into ``model_cache.cache_root()``
+        with a real progress bar, then reused forever (and offline).
+      * **Process** — a loaded ``WhisperModel`` is kept on the instance and
+        shared through :func:`get_transcriber`, so a second Generate in the
+        same session skips the multi-second load entirely.
+    """
 
     def __init__(
         self,
@@ -66,27 +77,50 @@ class Transcriber:
         self._model = None
         self._loaded_key: Optional[tuple] = None
 
+    @property
+    def is_warm(self) -> bool:
+        return self._model is not None
+
+    def unload(self) -> None:
+        self._model = None
+        self._loaded_key = None
+
     # -- model ------------------------------------------------------------
-    def load(self, progress: Optional[ProgressFn] = None):
+    def load(
+        self,
+        progress: Optional[ProgressFn] = None,
+        cancelled: Optional[object] = None,
+    ):
         from faster_whisper import WhisperModel  # imported lazily
 
+        token = as_token(cancelled)
         device, compute_type = pick_compute_settings(self.prefer_gpu)
         key = (self.model_size, device, compute_type)
         if self._model is not None and self._loaded_key == key:
+            if progress:
+                progress(f"Model {self.model_size} already loaded — reusing it.", 33)
             return self._model
 
+        # Step 1: make sure the weights are on disk (downloads once, resumable).
+        local_path = model_cache.ensure_model(
+            self.model_size, progress=progress, cancelled=token
+        )
+        token.check("model load")
+
+        # Step 2: load from the cache. `local_path` is "" when the direct
+        # download was unavailable — then faster-whisper fetches into the same
+        # cache root itself, so the result is still reused next run.
         if progress:
             progress(
-                f"Loading Whisper {self.model_size} ({device}/{compute_type})… "
-                "first run downloads the model.",
-                35,
+                f"Loading Whisper {self.model_size} ({device}/{compute_type})…", 34
             )
         self._model = WhisperModel(
-            self.model_size,
+            local_path or self.model_size,
             device=device,
             compute_type=compute_type,
             cpu_threads=self.cpu_threads,
             num_workers=1,
+            download_root=None if local_path else model_cache.cache_root(),
         )
         self._loaded_key = key
         return self._model
@@ -98,10 +132,16 @@ class Transcriber:
         progress: Optional[ProgressFn] = None,
         cancelled: Optional[object] = None,
         beam_size: int = 5,
+        time_offset: float = 0.0,
     ) -> List[Segment]:
+        """
+        Transcribe `wav_path`. `time_offset` (seconds) is added to every
+        timestamp — used when leading silence was trimmed off the file so cues
+        still line up with the Resolve timeline.
+        """
         token = as_token(cancelled)
         token.check("transcription")
-        model = self.load(progress)
+        model = self.load(progress, cancelled=token)
         token.check("transcription")
 
         if progress:
@@ -130,7 +170,13 @@ class Transcriber:
 
             text = (seg.text or "").strip()
             if text:
-                out.append(Segment(float(seg.start), float(seg.end), text))
+                out.append(
+                    Segment(
+                        float(seg.start) + time_offset,
+                        float(seg.end) + time_offset,
+                        text,
+                    )
+                )
             if progress and total > 0:
                 frac = min(1.0, float(seg.end) / total)
                 progress(
@@ -140,6 +186,30 @@ class Transcriber:
         if progress:
             progress(f"Transcribed {len(out)} segments.", 86)
         return out
+
+
+# --------------------------------------------------------------------------
+# Process-wide warm cache
+# --------------------------------------------------------------------------
+_WARM: Dict[Tuple[str, bool], Transcriber] = {}
+
+
+def get_transcriber(
+    model_size: str = DEFAULT_MODEL, prefer_gpu: bool = True
+) -> Transcriber:
+    """Reuse an already-loaded Transcriber for this (model, gpu) combination."""
+    key = (model_size, bool(prefer_gpu))
+    engine = _WARM.get(key)
+    if engine is None:
+        engine = Transcriber(model_size, prefer_gpu)
+        _WARM[key] = engine
+    return engine
+
+
+def release_transcribers() -> None:
+    for engine in _WARM.values():
+        engine.unload()
+    _WARM.clear()
 
 
 # --------------------------------------------------------------------------

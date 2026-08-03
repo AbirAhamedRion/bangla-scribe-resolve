@@ -129,3 +129,28 @@ subprocess.Popen([PYTHON, os.path.join(PLUGIN, "app.py")], cwd=PLUGIN)
 
 - The render queue is cleared before and after each run; existing jobs are
   removed, so queue anything you need after generating subtitles.
+
+## Model caching, timing repair & silence trim
+
+**Automatic model caching** (`model_cache.py`)
+Weights are downloaded once into `~/.cache/resolve_bangla_subtitles/models`
+(override with the `RBS_MODEL_CACHE` environment variable) with a real
+byte-level progress bar, and the download is cancellable and resumable. The
+Engine panel shows whether the selected model is cached and offers a
+**Clear cache** button. A loaded model is also kept warm in-process
+(`ai_engine.get_transcriber`), so a second run in the same session skips
+loading entirely.
+
+**Timing repair** (`srt_repair.py`)
+Before the SRT is written, every cue is sorted chronologically, de-duplicated,
+and checked for overlaps, zero/negative durations, NaN or negative starts and
+runaway lengths. Corrections are applied automatically and summarised in the
+log (e.g. "Timing repaired — fixed 2 overlapping, 1 bad duration cue(s)").
+`srt_repair.validate()` confirms nothing invalid remains.
+
+**Silence trimming** (`audio_trim.py`)
+Optional pre-pass that removes leading and trailing silence from the exported
+WAV (stdlib only — no ffmpeg, no `audioop`), with an adjustable threshold
+(-70 … -25 dB, default -45 dB) and a 0.25 s pad. Interior silence is left
+alone, and the removed head is added back to every timestamp so the subtitles
+stay in sync with the timeline. Trimmed temp files are deleted with the rest.

@@ -22,8 +22,10 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 import ai_engine
+import audio_trim
 import bn_srt
 import resolve_api
+import srt_repair
 from cancellation import CancelToken, Cancelled, as_token
 
 
@@ -38,6 +40,8 @@ class PipelineResult:
     placed_on_timeline: bool = False
     message: str = ""
     cancelled: bool = False
+    repair_summary: str = ""
+    trim_summary: str = ""
 
 
 def run_pipeline(
@@ -48,6 +52,8 @@ def run_pipeline(
     max_chars: int = bn_srt.DEFAULT_MAX_CHARS,
     max_lines: int = bn_srt.DEFAULT_MAX_LINES,
     place_on_timeline: bool = True,
+    trim_silence: bool = True,
+    silence_threshold_db: float = audio_trim.DEFAULT_THRESHOLD_DB,
     progress: Optional[ProgressFn] = None,
     cancelled: Optional[object] = None,
     transcriber: Optional[ai_engine.Transcriber] = None,
@@ -65,24 +71,61 @@ def run_pipeline(
     say(f"Connected — {ctx.project_name} / {ctx.timeline_name} (Resolve {version})", 3)
 
     wav_path = ""
+    trimmed_path = ""
     tmp_srt = ""
     final_srt = ""
     wrote_final = False
+    trim_summary = ""
+    repair_summary = ""
     try:
         token.check("audio export")
         wav_path = resolve_api.export_timeline_audio(
             ctx, progress=progress, cancelled=token
         )
 
+        # Optional pre-pass: strip leading/trailing silence so the first and
+        # last cues sit on the actual voice. The removed head is added back to
+        # every timestamp, so timeline sync is preserved.
+        offset = 0.0
+        audio_for_whisper = wav_path
+        if trim_silence:
+            token.check("silence trim")
+            say("Analysing audio for leading/trailing silence…", 33)
+            trim = audio_trim.trim_silence(
+                wav_path, threshold_db=silence_threshold_db, progress=progress
+            )
+            if trim.created_file:
+                trimmed_path = trim.path
+            audio_for_whisper = trim.path
+            offset = trim.offset
+            trim_summary = (
+                f"Trimmed {trim.trimmed_head:.1f}s of head and "
+                f"{trim.trimmed_tail:.1f}s of tail silence."
+                if trim.changed
+                else "No leading/trailing silence to trim."
+            )
+
         token.check("transcription")
-        engine = transcriber or ai_engine.Transcriber(model_size, prefer_gpu)
-        segments = engine.transcribe(wav_path, progress=progress, cancelled=token)
+        engine = transcriber or ai_engine.get_transcriber(model_size, prefer_gpu)
+        segments = engine.transcribe(
+            audio_for_whisper, progress=progress, cancelled=token, time_offset=offset
+        )
         if not segments:
             raise RuntimeError("No speech was detected in the timeline audio.")
 
         token.check("formatting")
         say("Formatting Bengali subtitles…", 88)
         cues = bn_srt.build_cues(segments, max_chars=max_chars, max_lines=max_lines)
+
+        # Final safety pass: sort, de-overlap and sanitise every timestamp
+        # before Resolve ever sees the file.
+        say("Checking cue timings…", 90)
+        cues, report = srt_repair.repair_cues(cues)
+        repair_summary = report.summary()
+        say(repair_summary, 91)
+        if not cues:
+            raise RuntimeError("Every cue was rejected by the timing check.")
+
         srt_text = bn_srt.cues_to_srt(cues)
 
         stamp = time.strftime("%Y%m%d_%H%M%S")
@@ -122,7 +165,15 @@ def run_pipeline(
             placed, message = False, "Imported into the Media Pool."
 
         say(message if placed else f"Finished — {message}", 100)
-        return PipelineResult(final_srt, len(cues), kept, placed, message)
+        return PipelineResult(
+            final_srt,
+            len(cues),
+            kept,
+            placed,
+            message,
+            repair_summary=repair_summary,
+            trim_summary=trim_summary,
+        )
 
     except Cancelled as stop:
         # Nothing partial survives a cancel: drop any half-produced SRT.
@@ -134,8 +185,10 @@ def run_pipeline(
     finally:
         # Step D - cleanup temporaries.
         _quiet_remove(wav_path)
+        _quiet_remove(trimmed_path)
         if tmp_srt and (keep_srt_copy or not os.path.exists(tmp_srt)):
             _quiet_remove(tmp_srt)
+
 
 
 def _atomic_write(path: str, text: str) -> None:

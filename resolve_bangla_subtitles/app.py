@@ -36,7 +36,9 @@ from PySide6.QtWidgets import (
 )
 
 import ai_engine
+import audio_trim
 import bn_srt
+import model_cache
 import pipeline
 from cancellation import CancelToken, Cancelled
 
@@ -73,6 +75,8 @@ class Worker(QObject):
                 max_chars=self.options["max_chars"],
                 max_lines=self.options["max_lines"],
                 place_on_timeline=self.options["place"],
+                trim_silence=self.options["trim"],
+                silence_threshold_db=self.options["threshold_db"],
                 progress=lambda m, p: self.progress.emit(m, p),
                 cancelled=self.token,
             )
@@ -248,6 +252,53 @@ class MainWindow(QWidget):
         row.addWidget(self.gpu_check)
         col.addLayout(row)
 
+        # Model cache state — tells the user up front whether this run will
+        # need a multi-gigabyte download or start immediately.
+        cache_row = QHBoxLayout()
+        cache_row.setSpacing(12)
+        self.cache_label = QLabel()
+        self.cache_label.setObjectName("Muted")
+        self.cache_label.setWordWrap(True)
+        clear_btn = QPushButton("Clear cache")
+        clear_btn.setObjectName("Ghost")
+        clear_btn.clicked.connect(self._clear_cache)
+        cache_row.addWidget(self.cache_label, 1)
+        cache_row.addWidget(clear_btn)
+        col.addLayout(cache_row)
+        self.model_box.currentTextChanged.connect(lambda _=None: self._refresh_cache())
+        self._refresh_cache()
+
+        col.addWidget(divider())
+
+        audio_head = QLabel("Audio")
+        audio_head.setObjectName("CardTitle")
+        col.addWidget(audio_head)
+
+        self.trim_check = QCheckBox(
+            "Trim leading and trailing silence before transcribing"
+        )
+        self.trim_check.setChecked(True)
+        col.addWidget(self.trim_check)
+
+        trim_row = QHBoxLayout()
+        trim_row.setSpacing(12)
+        thr_lbl = QLabel("Silence threshold")
+        thr_lbl.setObjectName("Muted")
+        self.threshold_slider = QSlider(Qt.Orientation.Horizontal)
+        self.threshold_slider.setRange(-70, -25)
+        self.threshold_slider.setValue(int(audio_trim.DEFAULT_THRESHOLD_DB))
+        self.threshold_value = QLabel(f"{int(audio_trim.DEFAULT_THRESHOLD_DB)} dB")
+        self.threshold_value.setObjectName("Muted")
+        self.threshold_value.setMinimumWidth(52)
+        self.threshold_slider.valueChanged.connect(
+            lambda v: self.threshold_value.setText(f"{v} dB")
+        )
+        self.trim_check.toggled.connect(self.threshold_slider.setEnabled)
+        trim_row.addWidget(thr_lbl)
+        trim_row.addWidget(self.threshold_slider, 1)
+        trim_row.addWidget(self.threshold_value)
+        col.addLayout(trim_row)
+
         col.addWidget(divider())
 
         fmt_head = QLabel("Subtitle formatting")
@@ -367,6 +418,29 @@ class MainWindow(QWidget):
         if d:
             self.out_value.setText(d)
 
+    def _refresh_cache(self) -> None:
+        """Show whether the selected model is already on disk."""
+        name = self.model_box.currentText()
+        if model_cache.is_cached(name):
+            gb = model_cache.cached_size_bytes(name) / 1_073_741_824
+            self.cache_label.setText(
+                f"✓ {name} cached ({gb:.1f} GB) — this run starts immediately."
+            )
+        else:
+            approx = model_cache.APPROX_SIZE_GB.get(name, 1.0)
+            self.cache_label.setText(
+                f"{name} is not cached yet — first run downloads ~{approx:.1f} GB "
+                "once, with progress shown below."
+            )
+
+    def _clear_cache(self) -> None:
+        name = self.model_box.currentText()
+        model_cache.clear_cache(name)
+        ai_engine.release_transcribers()
+        self._append(f"Cleared cached weights for {name}.")
+        self._refresh_cache()
+
+
     def _append(self, msg: str) -> None:
         self.log.appendPlainText(msg)
 
@@ -396,6 +470,8 @@ class MainWindow(QWidget):
             "max_chars": self.chars_slider.value(),
             "max_lines": self.lines_spin.value(),
             "place": self.place_check.isChecked(),
+            "trim": self.trim_check.isChecked(),
+            "threshold_db": float(self.threshold_slider.value()),
         }
 
         self.token = CancelToken()
@@ -453,9 +529,14 @@ class MainWindow(QWidget):
             f"Done — {result.segment_count} Bengali cues {tail}.",
             "ok" if result.placed_on_timeline else "",
         )
+        if result.trim_summary:
+            self._append(result.trim_summary)
+        if result.repair_summary:
+            self._append(result.repair_summary)
         if result.message:
             self._append(result.message)
         self._append(f"SRT saved to: {result.srt_path}")
+        self._refresh_cache()
         self._teardown()
 
 
