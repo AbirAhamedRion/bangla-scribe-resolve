@@ -19,6 +19,8 @@ import tempfile
 from dataclasses import dataclass
 from typing import Callable, Optional
 
+from cancellation import CancelToken, Cancelled, as_token
+
 ProgressFn = Callable[[str, int], None]  # (message, percent 0-100)
 
 
@@ -26,7 +28,13 @@ ProgressFn = Callable[[str, int], None]  # (message, percent 0-100)
 # Resolve module bootstrap
 # --------------------------------------------------------------------------
 def _candidate_module_paths() -> list[str]:
-    """Standard install locations of DaVinciResolveScript.py per OS."""
+    """
+    Standard install locations of DaVinciResolveScript.py per OS.
+
+    Covers Resolve 17 through the current 19.x / 20.x builds, including the
+    per-user Fusion path Blackmagic added for the newer installers and the
+    portable "Studio"-suffixed folders.
+    """
     paths: list[str] = []
     env = os.environ.get("RESOLVE_SCRIPT_API")
     if env:
@@ -34,15 +42,29 @@ def _candidate_module_paths() -> list[str]:
 
     if sys.platform.startswith("win"):
         pd = os.environ.get("PROGRAMDATA", r"C:\ProgramData")
+        appdata = os.environ.get("APPDATA", "")
+        pf = os.environ.get("PROGRAMFILES", r"C:\Program Files")
+        for product in ("DaVinci Resolve", "DaVinci Resolve Studio"):
+            paths.append(
+                os.path.join(
+                    pd, "Blackmagic Design", product,
+                    "Support", "Developer", "Scripting", "Modules",
+                )
+            )
+        if appdata:
+            paths.append(
+                os.path.join(
+                    appdata, "Blackmagic Design", "DaVinci Resolve",
+                    "Support", "Developer", "Scripting", "Modules",
+                )
+            )
+            paths.append(
+                os.path.join(appdata, "Blackmagic Design", "Fusion", "Modules")
+            )
         paths.append(
             os.path.join(
-                pd,
-                "Blackmagic Design",
-                "DaVinci Resolve",
-                "Support",
-                "Developer",
-                "Scripting",
-                "Modules",
+                pf, "Blackmagic Design", "DaVinci Resolve",
+                "Developer", "Scripting", "Modules",
             )
         )
     elif sys.platform == "darwin":
@@ -50,10 +72,54 @@ def _candidate_module_paths() -> list[str]:
             "/Library/Application Support/Blackmagic Design/DaVinci Resolve/"
             "Developer/Scripting/Modules"
         )
+        paths.append(
+            os.path.expanduser(
+                "~/Library/Application Support/Blackmagic Design/DaVinci Resolve/"
+                "Developer/Scripting/Modules"
+            )
+        )
+        paths.append("/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Libraries/Fusion")
     else:  # Linux
         paths.append("/opt/resolve/Developer/Scripting/Modules")
         paths.append("/home/resolve/Developer/Scripting/Modules")
+        paths.append(os.path.expanduser("~/.local/share/DaVinciResolve/Developer/Scripting/Modules"))
     return paths
+
+
+def _ensure_library_env() -> None:
+    """
+    Newer Resolve builds need RESOLVE_SCRIPT_API / RESOLVE_SCRIPT_LIB to be set
+    before DaVinciResolveScript can locate fusionscript. Fill in sane defaults
+    when the installer did not export them (common on Windows and macOS).
+    """
+    if sys.platform.startswith("win"):
+        pd = os.environ.get("PROGRAMDATA", r"C:\ProgramData")
+        api = os.path.join(
+            pd, "Blackmagic Design", "DaVinci Resolve",
+            "Support", "Developer", "Scripting",
+        )
+        lib = os.path.join(
+            os.environ.get("PROGRAMFILES", r"C:\Program Files"),
+            "Blackmagic Design", "DaVinci Resolve", "fusionscript.dll",
+        )
+    elif sys.platform == "darwin":
+        api = (
+            "/Library/Application Support/Blackmagic Design/DaVinci Resolve/"
+            "Developer/Scripting"
+        )
+        lib = (
+            "/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/"
+            "Libraries/Fusion/fusionscript.so"
+        )
+    else:
+        api = "/opt/resolve/Developer/Scripting"
+        lib = "/opt/resolve/libs/Fusion/fusionscript.so"
+
+    if not os.environ.get("RESOLVE_SCRIPT_API") and os.path.isdir(api):
+        os.environ["RESOLVE_SCRIPT_API"] = api
+    if not os.environ.get("RESOLVE_SCRIPT_LIB") and os.path.isfile(lib):
+        os.environ["RESOLVE_SCRIPT_LIB"] = lib
+
 
 
 def get_resolve():
