@@ -146,16 +146,20 @@ python pipeline.py`}</Code>
           <section id="use" className="mt-14">
             <h2 className="font-display text-2xl font-semibold">5. Generate subtitles</h2>
             <ol className="mt-4 space-y-3 text-sm text-muted-foreground">
-              <li><strong className="text-foreground">1.</strong> Pick a model — <span className="font-mono">large-v3</span> for final work, <span className="font-mono">medium</span>/<span className="font-mono">small</span> for fast drafts.</li>
+              <li><strong className="text-foreground">1.</strong> Pick a model — <span className="font-mono">large-v3</span> for final work, <span className="font-mono">medium</span>/<span className="font-mono">small</span> for fast drafts. The line under the picker tells you whether it is already cached or still needs its one-time download.</li>
               <li><strong className="text-foreground">2.</strong> Leave “Use GPU when available” on; it silently falls back to CPU INT8.</li>
-              <li><strong className="text-foreground">3.</strong> Set max characters per line (42 is a good default) and lines per caption (2).</li>
-              <li><strong className="text-foreground">4.</strong> Keep “Place subtitles on a subtitle track” checked for automatic placement.</li>
-              <li><strong className="text-foreground">5.</strong> Choose where the permanent <span className="font-mono">.srt</span> is saved — Resolve links to that file, so keep it around.</li>
-              <li><strong className="text-foreground">6.</strong> Hit <strong className="text-foreground">Generate Bengali Subtitles</strong> and watch the four step dots.</li>
+              <li><strong className="text-foreground">3.</strong> Keep “Trim leading and trailing silence” on so cues start on the actual voice; lower the threshold toward -70 dB for noisy rooms, raise it toward -25 dB for very quiet recordings.</li>
+              <li><strong className="text-foreground">4.</strong> Set max characters per line (42 is a good default) and lines per caption (2).</li>
+              <li><strong className="text-foreground">5.</strong> Keep “Place subtitles on a subtitle track” checked for automatic placement.</li>
+              <li><strong className="text-foreground">6.</strong> Choose where the permanent <span className="font-mono">.srt</span> is saved — Resolve links to that file, so keep it around.</li>
+              <li><strong className="text-foreground">7.</strong> Hit <strong className="text-foreground">Generate Bengali Subtitles</strong> and watch the four step dots. The log reports what the timing check corrected before the import.</li>
             </ol>
             <p className="mt-5 text-sm leading-relaxed text-muted-foreground">
-              The first run downloads the model weights, so allow extra time and an
-              internet connection once. Every later run is fully offline.
+              The first run downloads the model weights to{" "}
+              <span className="font-mono">~/.cache/resolve_bangla_subtitles/models</span>{" "}
+              (override with <span className="font-mono">RBS_MODEL_CACHE</span>) with a
+              live progress bar. Every later run reuses that cache and is fully offline;
+              “Clear cache” frees the space again.
             </p>
           </section>
 
