@@ -543,16 +543,10 @@ class MainWindow(QWidget):
         self.cancel_btn.setText("Cancel")
         self._set_status("Starting…")
 
-        options = {
-            "model": self.model_box.currentText(),
-            "gpu": self.gpu_check.isChecked(),
-            "output_dir": self.out_value.text(),
-            "max_chars": self.chars_slider.value(),
-            "max_lines": self.lines_spin.value(),
-            "place": self.place_check.isChecked(),
-            "trim": self.trim_check.isChecked(),
-            "threshold_db": float(self.threshold_slider.value()),
-        }
+        # Persist first, so a crash mid-run never loses the chosen options.
+        self._save_settings()
+        options = dict(self.settings)
+        options["threshold_db"] = float(self.threshold_slider.value())
 
         self.token = CancelToken()
         self.thread = QThread(self)
