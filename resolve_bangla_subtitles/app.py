@@ -278,7 +278,28 @@ class MainWindow(QWidget):
         self.model_box.currentTextChanged.connect(lambda _=None: self._refresh_cache())
         self._refresh_cache()
 
+        # Transcript reuse — the same timeline audio never gets transcribed twice.
+        self.reuse_check = QCheckBox(
+            "Reuse the cached transcript when the timeline audio is unchanged"
+        )
+        self.reuse_check.setChecked(bool(self.settings.get("reuse_transcript", True)))
+        col.addWidget(self.reuse_check)
+
+        tr_row = QHBoxLayout()
+        tr_row.setSpacing(12)
+        self.transcript_label = QLabel()
+        self.transcript_label.setObjectName("Muted")
+        self.transcript_label.setWordWrap(True)
+        forget_btn = QPushButton("Clear transcripts")
+        forget_btn.setObjectName("Ghost")
+        forget_btn.clicked.connect(self._clear_transcripts)
+        tr_row.addWidget(self.transcript_label, 1)
+        tr_row.addWidget(forget_btn)
+        col.addLayout(tr_row)
+        self._refresh_transcripts()
+
         col.addWidget(divider())
+
 
         audio_head = QLabel("Audio")
         audio_head.setObjectName("CardTitle")
