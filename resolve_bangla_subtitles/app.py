@@ -67,9 +67,13 @@ class Worker(QObject):
                 prefer_gpu=self.options["gpu"],
                 keep_srt_copy=True,
                 output_dir=self.options.get("output_dir") or None,
+                max_chars=self.options["max_chars"],
+                max_lines=self.options["max_lines"],
+                place_on_timeline=self.options["place"],
                 progress=lambda m, p: self.progress.emit(m, p),
                 cancelled=lambda: self._cancel,
             )
+
             self.finished.emit(result)
         except Exception as exc:  # surfaced in the UI, never silently swallowed
             self.failed.emit(f"{exc}\n\n{traceback.format_exc(limit=3)}")
