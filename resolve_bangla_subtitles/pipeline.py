@@ -15,7 +15,9 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 import ai_engine
+import bn_srt
 import resolve_api
+
 
 ProgressFn = Callable[[str, int], None]
 
