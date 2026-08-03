@@ -470,6 +470,8 @@ class MainWindow(QWidget):
             "max_chars": self.chars_slider.value(),
             "max_lines": self.lines_spin.value(),
             "place": self.place_check.isChecked(),
+            "trim": self.trim_check.isChecked(),
+            "threshold_db": float(self.threshold_slider.value()),
         }
 
         self.token = CancelToken()
