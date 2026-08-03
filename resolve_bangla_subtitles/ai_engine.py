@@ -26,6 +26,21 @@ ProgressFn = Callable[[str, int], None]
 DEFAULT_MODEL = "large-v3"
 LANGUAGE = "bn"
 
+# Whisper sometimes answers in romanised "Banglish" (Latin letters) instead of
+# Bengali script. Seeding the decoder with a short Bengali sentence pins the
+# output script; the ratio check below catches the rare case where it doesn't.
+BENGALI_PROMPT = "নিচের অডিওটি বাংলা ভাষায় বলা হয়েছে। বাংলা লিপিতে হুবহু লিখুন।"
+
+
+def bengali_ratio(text: str) -> float:
+    """Share of letters that are Bengali script (0.0 – 1.0)."""
+    letters = [ch for ch in text if ch.isalpha()]
+    if not letters:
+        return 1.0
+    bn = sum(1 for ch in letters if "\u0980" <= ch <= "\u09ff")
+    return bn / len(letters)
+
+
 
 @dataclass
 class Segment:
