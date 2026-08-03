@@ -292,6 +292,7 @@ def export_timeline_audio(
     except Exception:
         pass
 
+    token.check("audio export")
     job_id = project.AddRenderJob()
     if not job_id:
         raise RuntimeError(
@@ -299,18 +300,55 @@ def export_timeline_audio(
             "has audio and that the Deliver page settings are valid."
         )
 
-    say("Rendering timeline audio…", 10)
-    project.StartRendering([job_id], isInteractiveMode=False)
-
-    while project.IsRenderingInProgress():
-        status = {}
+    def _abort_render() -> None:
         try:
-            status = project.GetRenderJobStatus(job_id) or {}
+            project.StopRendering()
         except Exception:
             pass
-        pct = int(status.get("CompletionPercentage", 0) or 0)
-        say(f"Rendering timeline audio… {pct}%", 10 + int(pct * 0.20))
-        time.sleep(poll_seconds)
+
+    token.add_hook(_abort_render)
+
+    say("Rendering timeline audio…", 10)
+    try:
+        project.StartRendering([job_id], isInteractiveMode=False)
+
+        while project.IsRenderingInProgress():
+            if token.cancelled:
+                _abort_render()
+                break
+            status = {}
+            try:
+                status = project.GetRenderJobStatus(job_id) or {}
+            except Exception:
+                pass
+            pct = int(status.get("CompletionPercentage", 0) or 0)
+            say(f"Rendering timeline audio… {pct}%", 10 + int(pct * 0.20))
+            # Interruptible wait so Cancel reacts within ~100 ms.
+            if token.wait(min(poll_seconds, 0.25)):
+                continue
+    finally:
+        token.remove_hook(_abort_render)
+
+    if token.cancelled:
+        # Wait briefly for Resolve to release the file, then bin the partial WAV.
+        for _ in range(20):
+            try:
+                if not project.IsRenderingInProgress():
+                    break
+            except Exception:
+                break
+            time.sleep(0.1)
+        try:
+            project.DeleteAllRenderJobs()
+        except Exception:
+            pass
+        partial = _find_rendered_file(out_dir, base_name)
+        if partial:
+            try:
+                os.remove(partial)
+            except OSError:
+                pass
+        raise Cancelled("Cancelled during audio export — render stopped cleanly.")
 
     status = project.GetRenderJobStatus(job_id) or {}
     if status.get("JobStatus") not in (None, "Complete"):
@@ -328,6 +366,7 @@ def export_timeline_audio(
         )
     say("Audio export complete.", 30)
     return wav_path
+
 
 
 def _find_rendered_file(out_dir: str, base_name: str) -> Optional[str]:
