@@ -248,7 +248,9 @@ class MainWindow(QWidget):
         model_lbl.setObjectName("Muted")
         self.model_box = QComboBox()
         self.model_box.addItems(["large-v3", "medium", "small"])
-        self.model_box.setCurrentText(ai_engine.DEFAULT_MODEL)
+        self.model_box.setCurrentText(
+            self.settings.get("model", ai_engine.DEFAULT_MODEL)
+        )
         self.model_box.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
@@ -256,7 +258,7 @@ class MainWindow(QWidget):
         row.addWidget(self.model_box, 1)
 
         self.gpu_check = QCheckBox("Use GPU when available")
-        self.gpu_check.setChecked(True)
+        self.gpu_check.setChecked(bool(self.settings.get("gpu", True)))
         row.addWidget(self.gpu_check)
         col.addLayout(row)
 
