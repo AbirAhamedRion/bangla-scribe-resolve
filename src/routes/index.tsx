@@ -109,7 +109,7 @@ const FAQ = [
   },
   {
     q: "Which Resolve versions are supported?",
-    a: "Resolve 18, 18.5, 19 and 20. The plugin auto-discovers the scripting modules on Windows, macOS and Linux — including the newer per-user Fusion module paths — and falls back to the bare fusionscript module when DaVinciResolveScript is missing.",
+    a: "Resolve 18, 18.5, 19, 20 and 21. The plugin auto-discovers the scripting modules on Windows, macOS and Linux — including the newer per-user Fusion module paths — and falls back to the bare fusionscript module when DaVinciResolveScript is missing.",
   },
   {
     q: "How long does a transcription take?",

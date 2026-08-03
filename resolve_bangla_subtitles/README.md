@@ -17,7 +17,7 @@ style.qss       Premium dark theme
 
 ## 1. Requirements
 
-- DaVinci Resolve **Studio** 18/19/20 (free edition has no scripting API)
+- DaVinci Resolve **Studio** 18/19/20/21 (free edition has no scripting API)
 - Python 3.10–3.12 (64-bit)
 - ~3 GB free disk for the `large-v3` model (downloaded once, cached in
   `~/.cache/huggingface`)
