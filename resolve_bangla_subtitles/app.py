@@ -635,6 +635,7 @@ class MainWindow(QWidget):
 
     def closeEvent(self, event) -> None:
         """Closing mid-run cancels first so Resolve is never left rendering."""
+        self._save_settings()
         if self.worker:
             self.worker.cancel()
             if self.thread:
