@@ -252,6 +252,53 @@ class MainWindow(QWidget):
         row.addWidget(self.gpu_check)
         col.addLayout(row)
 
+        # Model cache state — tells the user up front whether this run will
+        # need a multi-gigabyte download or start immediately.
+        cache_row = QHBoxLayout()
+        cache_row.setSpacing(12)
+        self.cache_label = QLabel()
+        self.cache_label.setObjectName("Muted")
+        self.cache_label.setWordWrap(True)
+        clear_btn = QPushButton("Clear cache")
+        clear_btn.setObjectName("Ghost")
+        clear_btn.clicked.connect(self._clear_cache)
+        cache_row.addWidget(self.cache_label, 1)
+        cache_row.addWidget(clear_btn)
+        col.addLayout(cache_row)
+        self.model_box.currentTextChanged.connect(lambda _=None: self._refresh_cache())
+        self._refresh_cache()
+
+        col.addWidget(divider())
+
+        audio_head = QLabel("Audio")
+        audio_head.setObjectName("CardTitle")
+        col.addWidget(audio_head)
+
+        self.trim_check = QCheckBox(
+            "Trim leading and trailing silence before transcribing"
+        )
+        self.trim_check.setChecked(True)
+        col.addWidget(self.trim_check)
+
+        trim_row = QHBoxLayout()
+        trim_row.setSpacing(12)
+        thr_lbl = QLabel("Silence threshold")
+        thr_lbl.setObjectName("Muted")
+        self.threshold_slider = QSlider(Qt.Orientation.Horizontal)
+        self.threshold_slider.setRange(-70, -25)
+        self.threshold_slider.setValue(int(audio_trim.DEFAULT_THRESHOLD_DB))
+        self.threshold_value = QLabel(f"{int(audio_trim.DEFAULT_THRESHOLD_DB)} dB")
+        self.threshold_value.setObjectName("Muted")
+        self.threshold_value.setMinimumWidth(52)
+        self.threshold_slider.valueChanged.connect(
+            lambda v: self.threshold_value.setText(f"{v} dB")
+        )
+        self.trim_check.toggled.connect(self.threshold_slider.setEnabled)
+        trim_row.addWidget(thr_lbl)
+        trim_row.addWidget(self.threshold_slider, 1)
+        trim_row.addWidget(self.threshold_value)
+        col.addLayout(trim_row)
+
         col.addWidget(divider())
 
         fmt_head = QLabel("Subtitle formatting")
