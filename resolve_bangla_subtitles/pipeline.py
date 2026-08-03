@@ -224,6 +224,8 @@ def run_pipeline(
             message,
             repair_summary=repair_summary,
             trim_summary=trim_summary,
+            cache_summary=cache_summary,
+            reused_transcript=reused,
         )
 
     except Cancelled as stop:
