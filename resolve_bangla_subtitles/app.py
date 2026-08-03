@@ -79,6 +79,7 @@ class Worker(QObject):
                 place_on_timeline=self.options["place"],
                 trim_silence=self.options["trim"],
                 silence_threshold_db=self.options["threshold_db"],
+                reuse_transcript=self.options.get("reuse_transcript", True),
                 progress=lambda m, p: self.progress.emit(m, p),
                 cancelled=self.token,
             )
