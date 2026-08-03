@@ -186,3 +186,44 @@ QScrollBar::handle:vertical {
 }
 QScrollBar::add-line, QScrollBar::sub-line { height: 0; }
 QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
+
+/* ---------- slider / spinbox (formatting controls) ---------- */
+QSlider::groove:horizontal {
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.1);
+}
+QSlider::sub-page:horizontal {
+    height: 4px;
+    border-radius: 2px;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #5b8cff, stop:1 #8b5bff);
+}
+QSlider::handle:horizontal {
+    width: 14px;
+    height: 14px;
+    margin: -6px 0;
+    border-radius: 7px;
+    background: #ffffff;
+    border: 2px solid #5b8cff;
+}
+QSlider::handle:horizontal:hover { border-color: #8b5bff; }
+
+QSpinBox {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 6px 8px;
+    min-width: 52px;
+}
+QSpinBox:focus { border-color: #5b8cff; }
+QSpinBox::up-button, QSpinBox::down-button {
+    background: rgba(255, 255, 255, 0.06);
+    border: none;
+    width: 16px;
+    border-radius: 4px;
+    margin: 2px;
+}
+QSpinBox::up-button:hover, QSpinBox::down-button:hover {
+    background: rgba(91, 140, 255, 0.5);
+}
