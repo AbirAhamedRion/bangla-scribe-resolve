@@ -382,7 +382,7 @@ _atomic_write(srt_path, srt_text)       # never a truncated .srt`}
               {[
                 {
                   t: "Resolve 18 → 20",
-                  b: "Version detection via GetVersion(), subtitle-track append with mediaType 3 on 18.5+, and an ImportIntoTimeline fallback for older builds.",
+                  b: "Version detection via GetVersion(), module discovery across every Resolve 18-21 product folder, subtitle-track append with mediaType 3 on 18.5+, and an ImportIntoTimeline fallback for older builds.",
                 },
                 {
                   t: "Windows · macOS · Linux",
