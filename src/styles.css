@@ -142,3 +142,95 @@
     color: var(--color-foreground);
   }
 }
+
+/* --------------------------------------------------------------------------
+ * Bangla Subtitle Studio — product site theme.
+ * Dark, editorial "colour-suite" palette: ink background, signal teal accent,
+ * warm amber highlight. Overrides the starter tokens for the whole site.
+ * -------------------------------------------------------------------------- */
+@theme inline {
+  --font-display: "Sora", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-bengali: "Noto Sans Bengali", "Manrope", sans-serif;
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-signal: var(--signal);
+  --color-signal-foreground: var(--signal-foreground);
+  --color-highlight: var(--highlight);
+  --color-highlight-foreground: var(--highlight-foreground);
+}
+
+:root {
+  --radius: 0.9rem;
+  --background: oklch(0.16 0.019 255);
+  --foreground: oklch(0.968 0.007 250);
+  --surface: oklch(0.205 0.021 256);
+  --surface-raised: oklch(0.245 0.023 257);
+  --card: oklch(0.205 0.021 256);
+  --card-foreground: oklch(0.968 0.007 250);
+  --popover: oklch(0.205 0.021 256);
+  --popover-foreground: oklch(0.968 0.007 250);
+  --primary: oklch(0.795 0.135 191);
+  --primary-foreground: oklch(0.17 0.03 210);
+  --signal: oklch(0.795 0.135 191);
+  --signal-foreground: oklch(0.17 0.03 210);
+  --highlight: oklch(0.83 0.145 76);
+  --highlight-foreground: oklch(0.2 0.04 70);
+  --secondary: oklch(0.26 0.023 257);
+  --secondary-foreground: oklch(0.95 0.008 250);
+  --muted: oklch(0.26 0.023 257);
+  --muted-foreground: oklch(0.72 0.021 256);
+  --accent: oklch(0.28 0.03 210);
+  --accent-foreground: oklch(0.96 0.008 250);
+  --destructive: oklch(0.63 0.2 25);
+  --destructive-foreground: oklch(0.98 0.005 250);
+  --border: oklch(1 0 0 / 11%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.795 0.135 191 / 60%);
+  --gradient-hero: radial-gradient(
+      120% 90% at 12% 0%,
+      color-mix(in oklab, var(--signal) 22%, transparent) 0%,
+      transparent 58%
+    ),
+    radial-gradient(
+      90% 80% at 92% 8%,
+      color-mix(in oklab, var(--highlight) 16%, transparent) 0%,
+      transparent 60%
+    );
+  --gradient-rule: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--signal) 55%, transparent),
+    transparent
+  );
+  --shadow-glow: 0 24px 70px -32px color-mix(in oklab, var(--signal) 55%, transparent);
+  --shadow-card: 0 22px 60px -34px oklch(0 0 0 / 85%);
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+}
+
+@utility bn {
+  font-family: var(--font-bengali);
+}
+
+@utility hero-glow {
+  background-image: var(--gradient-hero);
+}
+
+@utility glass-card {
+  background-color: color-mix(in oklab, var(--surface) 78%, transparent);
+  border: 1px solid var(--color-border);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow-card);
+}
