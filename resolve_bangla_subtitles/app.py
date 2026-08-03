@@ -154,6 +154,8 @@ class MainWindow(QWidget):
         self._drag: QPoint | None = None
         self.thread: QThread | None = None
         self.worker: Worker | None = None
+        self.token: CancelToken | None = None
+
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(16, 16, 16, 16)
