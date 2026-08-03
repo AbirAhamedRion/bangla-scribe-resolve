@@ -1,0 +1,188 @@
+/* ------------------------------------------------------------------
+   Bangla Subtitle Studio — premium dark SaaS theme
+   Glassmorphic card on a deep gradient shell, macOS-inspired spacing.
+------------------------------------------------------------------ */
+
+#Shell {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #0b0f1a, stop:0.45 #121826, stop:1 #0d1220);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 18px;
+}
+
+QWidget {
+    color: #e7ecf5;
+    font-family: "Inter", "SF Pro Display", "Segoe UI", "Noto Sans Bengali", sans-serif;
+    font-size: 13px;
+}
+
+/* ---------- title bar ---------- */
+#TitleBar { background: transparent; }
+
+#AppTitle {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    color: #f2f6ff;
+}
+
+#AppSubtitle {
+    font-size: 11px;
+    color: rgba(231, 236, 245, 0.45);
+}
+
+#WinBtn {
+    background: rgba(255, 255, 255, 0.06);
+    border: none;
+    border-radius: 6px;
+    min-width: 12px;
+    max-width: 12px;
+    min-height: 12px;
+    max-height: 12px;
+}
+#WinBtnClose { background: #ff5f57; }
+#WinBtnMin   { background: #febc2e; }
+#WinBtn:hover, #WinBtnClose:hover, #WinBtnMin:hover { background: #ffffff; }
+
+/* ---------- glass card ---------- */
+#Card {
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+}
+
+#CardTitle {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: rgba(231, 236, 245, 0.5);
+}
+
+#Hero {
+    font-size: 24px;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.4px;
+}
+
+#Muted { color: rgba(231, 236, 245, 0.55); }
+
+#Divider {
+    background: rgba(255, 255, 255, 0.07);
+    max-height: 1px;
+    min-height: 1px;
+    border: none;
+}
+
+/* ---------- inputs ---------- */
+QComboBox, QLineEdit {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 8px 12px;
+    selection-background-color: #5b8cff;
+}
+QComboBox:hover, QLineEdit:hover { border-color: rgba(120, 160, 255, 0.5); }
+QComboBox:focus, QLineEdit:focus { border-color: #5b8cff; }
+QComboBox::drop-down { border: none; width: 22px; }
+QComboBox QAbstractItemView {
+    background: #141a29;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 4px;
+    outline: none;
+    selection-background-color: rgba(91, 140, 255, 0.35);
+}
+
+QCheckBox { spacing: 8px; color: rgba(231, 236, 245, 0.8); }
+QCheckBox::indicator {
+    width: 16px; height: 16px;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.05);
+}
+QCheckBox::indicator:checked {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #5b8cff, stop:1 #7f5bff);
+    border-color: #7f5bff;
+}
+
+/* ---------- buttons ---------- */
+QPushButton#Primary {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #5b8cff, stop:1 #8b5bff);
+    border: none;
+    border-radius: 12px;
+    padding: 12px 22px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #ffffff;
+}
+QPushButton#Primary:hover {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #6f9bff, stop:1 #9a6dff);
+}
+QPushButton#Primary:pressed { background: #4a76e0; }
+QPushButton#Primary:disabled {
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(231, 236, 245, 0.35);
+}
+
+QPushButton#Ghost {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 12px 18px;
+    color: rgba(231, 236, 245, 0.85);
+}
+QPushButton#Ghost:hover { background: rgba(255, 255, 255, 0.1); }
+QPushButton#Ghost:disabled { color: rgba(231, 236, 245, 0.3); }
+
+/* ---------- progress ---------- */
+QProgressBar {
+    background: rgba(255, 255, 255, 0.06);
+    border: none;
+    border-radius: 6px;
+    height: 8px;
+    text-align: center;
+    color: transparent;
+}
+QProgressBar::chunk {
+    border-radius: 6px;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #35d6a4, stop:0.5 #5b8cff, stop:1 #8b5bff);
+}
+
+#StatusLabel { font-size: 12px; color: rgba(231, 236, 245, 0.75); }
+#StatusOk    { color: #35d6a4; }
+#StatusError { color: #ff6b6b; }
+
+#StepDot {
+    min-width: 8px; max-width: 8px; min-height: 8px; max-height: 8px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.15);
+}
+#StepDotActive { background: #5b8cff; }
+#StepDotDone   { background: #35d6a4; }
+
+/* ---------- log ---------- */
+QPlainTextEdit#Log {
+    background: rgba(0, 0, 0, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    padding: 10px;
+    font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+    font-size: 11px;
+    color: rgba(231, 236, 245, 0.7);
+}
+
+QScrollBar:vertical {
+    background: transparent; width: 8px; margin: 4px;
+}
+QScrollBar::handle:vertical {
+    background: rgba(255, 255, 255, 0.16);
+    border-radius: 4px; min-height: 24px;
+}
+QScrollBar::add-line, QScrollBar::sub-line { height: 0; }
+QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
