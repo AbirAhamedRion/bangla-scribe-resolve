@@ -162,15 +162,70 @@ class Transcriber:
         if progress:
             progress("Transcribing Bengali audio…", 40)
 
+        out = self._decode(
+            model,
+            wav_path,
+            beam_size=beam_size,
+            time_offset=time_offset,
+            initial_prompt=BENGALI_PROMPT,
+            token=token,
+            progress=progress,
+            progress_base=40,
+            progress_span=45,
+        )
+
+        # Guard against romanised "Banglish" output: if most letters came back
+        # in Latin script, decode once more with a greedy, prompt-anchored pass.
+        joined = " ".join(s.text for s in out)
+        if joined and bengali_ratio(joined) < 0.5:
+            if progress:
+                progress("Latin script detected — redoing in Bengali script…", 60)
+            token.check("transcription")
+            retry = self._decode(
+                model,
+                wav_path,
+                beam_size=max(beam_size, 5),
+                time_offset=time_offset,
+                initial_prompt=BENGALI_PROMPT,
+                token=token,
+                progress=progress,
+                progress_base=62,
+                progress_span=22,
+                temperature=[0.0],
+                greedy=True,
+            )
+            retry_text = " ".join(s.text for s in retry)
+            if retry_text and bengali_ratio(retry_text) > bengali_ratio(joined):
+                out = retry
+
+        if progress:
+            progress(f"Transcribed {len(out)} segments.", 86)
+        return out
+
+    def _decode(
+        self,
+        model,
+        wav_path: str,
+        beam_size: int,
+        time_offset: float,
+        initial_prompt: Optional[str],
+        token,
+        progress: Optional[ProgressFn],
+        progress_base: int,
+        progress_span: int,
+        temperature=(0.0, 0.2, 0.4, 0.6, 0.8, 1.0),
+        greedy: bool = False,
+    ) -> List[Segment]:
         segments_iter, info = model.transcribe(
             wav_path,
             language=LANGUAGE,
             task="transcribe",
-            beam_size=beam_size,
+            beam_size=1 if greedy else beam_size,
             vad_filter=True,
             vad_parameters={"min_silence_duration_ms": 500},
             condition_on_previous_text=False,  # avoids Bengali repetition loops
-            temperature=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+            temperature=list(temperature),
+            initial_prompt=initial_prompt,
             word_timestamps=False,
         )
 
@@ -196,11 +251,10 @@ class Transcriber:
                 frac = min(1.0, float(seg.end) / total)
                 progress(
                     f"Transcribing… {int(frac * 100)}%",
-                    40 + int(frac * 45),
+                    progress_base + int(frac * progress_span),
                 )
-        if progress:
-            progress(f"Transcribed {len(out)} segments.", 86)
         return out
+
 
 
 # --------------------------------------------------------------------------
