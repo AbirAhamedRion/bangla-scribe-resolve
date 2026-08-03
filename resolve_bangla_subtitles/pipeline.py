@@ -25,6 +25,8 @@ class PipelineResult:
     srt_path: str
     segment_count: int
     kept_srt: bool
+    placed_on_timeline: bool = False
+    message: str = ""
 
 
 def run_pipeline(
@@ -32,6 +34,9 @@ def run_pipeline(
     prefer_gpu: bool = True,
     keep_srt_copy: bool = True,
     output_dir: Optional[str] = None,
+    max_chars: int = bn_srt.DEFAULT_MAX_CHARS,
+    max_lines: int = bn_srt.DEFAULT_MAX_LINES,
+    place_on_timeline: bool = True,
     progress: Optional[ProgressFn] = None,
     cancelled: Optional[Callable[[], bool]] = None,
     transcriber: Optional[ai_engine.Transcriber] = None,
@@ -61,12 +66,14 @@ def run_pipeline(
             raise RuntimeError("No speech was detected in the timeline audio.")
 
         check()
+        say("Formatting Bengali subtitles…", 88)
+        cues = bn_srt.build_cues(segments, max_chars=max_chars, max_lines=max_lines)
         stamp = time.strftime("%Y%m%d_%H%M%S")
         base = f"{_safe(ctx.timeline_name)}_bn_{stamp}.srt"
         tmp_srt = os.path.join(tempfile.gettempdir(), "resolve_bangla_subs", base)
         os.makedirs(os.path.dirname(tmp_srt), exist_ok=True)
-        ai_engine.write_srt(segments, tmp_srt)
-        say("Importing subtitles into the Media Pool…", 90)
+        with open(tmp_srt, "w", encoding="utf-8-sig", newline="\n") as fh:
+            fh.write(bn_srt.cues_to_srt(cues))
 
         final_srt = tmp_srt
         kept = False
@@ -81,14 +88,21 @@ def run_pipeline(
             shutil.copy2(tmp_srt, final_srt)
             kept = True
 
-        if not resolve_api.import_srt(ctx, final_srt):
-            raise RuntimeError(
-                "Resolve could not import the SRT. The file is still available "
-                f"at: {final_srt}"
+        if place_on_timeline:
+            placed, message = resolve_api.place_srt_on_timeline(
+                ctx, final_srt, progress=progress
             )
+        else:
+            if resolve_api.import_srt(ctx, final_srt) is None:
+                raise RuntimeError(
+                    "Resolve could not import the SRT. The file is still "
+                    f"available at: {final_srt}"
+                )
+            placed, message = False, "Imported into the Media Pool."
 
-        say("Done — drag the SRT from the Media Pool onto a subtitle track.", 100)
-        return PipelineResult(final_srt, len(segments), kept)
+        say(message if placed else f"Finished — {message}", 100)
+        return PipelineResult(final_srt, len(cues), kept, placed, message)
+
 
     finally:
         # Step D - cleanup temporaries.
