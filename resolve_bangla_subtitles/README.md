@@ -69,9 +69,31 @@ python app.py          # GUI
 python pipeline.py     # headless CLI, same pipeline
 ```
 
-Click **Generate Bengali Subtitles**. When it finishes, the `.srt` appears in
-the Media Pool — drag it onto a subtitle track and style it once from the
-Inspector to format every caption at the same time.
+Click **Generate Bengali Subtitles**. The app adds a subtitle track if your
+timeline has none, imports the `.srt` and drops it on that track for you — no
+dragging. Select the track and style it once from the Inspector to format every
+caption at the same time.
+
+### Formatting controls
+
+- **Max characters per line** (20–70, default 42) — the readability budget for
+  each line.
+- **Lines** (1–3, default 2) — maximum rows per caption.
+- **Place subtitles on the timeline** — turn off if you only want the SRT in
+  the Media Pool.
+
+What the formatter does (`bn_srt.py`):
+
+- normalises Bengali punctuation: Latin `.` after Bengali text becomes a danda
+  `।`, `...` becomes `…`, `।।` becomes `॥`, spacing around punctuation is
+  fixed, and ZWSP/BOM noise is stripped
+- splits over-long Whisper segments at sentence (`। ॥ ? ! …`) and then clause
+  (`, ; : —`) boundaries, re-timing each new cue in proportion to its length
+- wraps lines only at safe break points — never before a matra, hasant (্),
+  ZWJ/ZWNJ or trailing punctuation, so conjuncts never split — and balances
+  two-line cues so the rows are similar lengths
+- enforces a 0.7 s minimum / 7 s maximum cue duration and removes overlaps
+
 
 ## 5. Where to place the scripts (optional Resolve menu entry)
 
