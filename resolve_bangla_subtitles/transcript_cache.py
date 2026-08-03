@@ -30,7 +30,7 @@ import time
 from dataclasses import dataclass
 from typing import Callable, List, Optional, Sequence
 
-CACHE_VERSION = 2
+CACHE_VERSION = 3
 CHUNK = 128 * 1024
 SAMPLES = 8
 MAX_ENTRIES = 40
