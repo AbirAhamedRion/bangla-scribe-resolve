@@ -57,6 +57,7 @@ def run_pipeline(
     place_on_timeline: bool = True,
     trim_silence: bool = True,
     silence_threshold_db: float = audio_trim.DEFAULT_THRESHOLD_DB,
+    reuse_transcript: bool = True,
     progress: Optional[ProgressFn] = None,
     cancelled: Optional[object] = None,
     transcriber: Optional[ai_engine.Transcriber] = None,
