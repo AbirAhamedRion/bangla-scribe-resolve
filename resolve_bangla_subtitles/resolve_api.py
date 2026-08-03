@@ -218,9 +218,12 @@ def export_timeline_audio(
     poll_seconds: float = 1.0,
     cancelled: Optional[object] = None,
 ) -> str:
-
+    """
     Clear the render queue, configure an 'audio only' WAV render of the whole
     current timeline and render it into the OS temp directory.
+
+    Cancellation-safe: if the token is tripped while Resolve is rendering, the
+    job is stopped, removed from the queue and any partial file is deleted.
 
     Returns the absolute path of the rendered .wav file.
     """
@@ -229,8 +232,11 @@ def export_timeline_audio(
         if progress:
             progress(msg, pct)
 
+    token = as_token(cancelled)
     project = ctx.project
+    token.check("audio export")
     say("Preparing render queue…", 2)
+
 
     # Resolve must be on the Deliver page for render settings to apply cleanly.
     try:
