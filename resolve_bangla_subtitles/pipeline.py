@@ -131,4 +131,6 @@ if __name__ == "__main__":
         print(f"[{pct:3d}%] {msg}")
 
     result = run_pipeline(progress=_cli)
-    print(f"\nSRT: {result.srt_path}  ({result.segment_count} segments)")
+    print(f"\nSRT: {result.srt_path}  ({result.segment_count} cues)")
+    print(result.message)
+
