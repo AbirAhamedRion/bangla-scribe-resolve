@@ -22,8 +22,10 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 import ai_engine
+import audio_trim
 import bn_srt
 import resolve_api
+import srt_repair
 from cancellation import CancelToken, Cancelled, as_token
 
 
@@ -38,6 +40,8 @@ class PipelineResult:
     placed_on_timeline: bool = False
     message: str = ""
     cancelled: bool = False
+    repair_summary: str = ""
+    trim_summary: str = ""
 
 
 def run_pipeline(
@@ -48,6 +52,8 @@ def run_pipeline(
     max_chars: int = bn_srt.DEFAULT_MAX_CHARS,
     max_lines: int = bn_srt.DEFAULT_MAX_LINES,
     place_on_timeline: bool = True,
+    trim_silence: bool = True,
+    silence_threshold_db: float = audio_trim.DEFAULT_THRESHOLD_DB,
     progress: Optional[ProgressFn] = None,
     cancelled: Optional[object] = None,
     transcriber: Optional[ai_engine.Transcriber] = None,
