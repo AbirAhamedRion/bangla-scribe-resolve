@@ -26,6 +26,7 @@ import audio_trim
 import bn_srt
 import resolve_api
 import srt_repair
+import transcript_cache
 from cancellation import CancelToken, Cancelled, as_token
 
 
