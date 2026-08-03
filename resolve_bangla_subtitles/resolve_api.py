@@ -216,8 +216,9 @@ def export_timeline_audio(
     ctx: ResolveContext,
     progress: Optional[ProgressFn] = None,
     poll_seconds: float = 1.0,
+    cancelled: Optional[object] = None,
 ) -> str:
-    """
+
     Clear the render queue, configure an 'audio only' WAV render of the whole
     current timeline and render it into the OS temp directory.
 
