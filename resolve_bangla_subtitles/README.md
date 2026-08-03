@@ -154,3 +154,37 @@ WAV (stdlib only — no ffmpeg, no `audioop`), with an adjustable threshold
 (-70 … -25 dB, default -45 dB) and a 0.25 s pad. Interior silence is left
 alone, and the removed head is added back to every timestamp so the subtitles
 stay in sync with the timeline. Trimmed temp files are deleted with the rest.
+
+## Transcript caching & saved settings
+
+**Transcript cache (`transcript_cache.py`)** — after each successful run the
+segments are stored as JSON in
+`~/.cache/resolve_bangla_subtitles/transcripts` (override with
+`RBS_TRANSCRIPT_CACHE`). The key is a fast content fingerprint of the exported
+WAV (file size + SHA-256 of evenly spaced 128 KB chunks) combined with the
+model, language and silence-trim settings. Re-running the same timeline skips
+both the trim pass and Whisper entirely — subtitles regenerate in seconds, so
+you can freely tweak line length or lines-per-caption. Edit the timeline and
+the fingerprint changes, forcing a fresh transcription. Turn it off with the
+"Reuse the cached transcript" checkbox; the last 40 entries are kept (LRU).
+
+**Saved settings (`settings_store.py`)** — model, GPU toggle, silence trim and
+threshold, max characters per line, lines per caption, timeline placement,
+transcript reuse, output folder and window size are written to JSON on every
+run and on close, then restored at startup:
+
+- Windows: `%APPDATA%\ResolveBanglaSubtitles\settings.json`
+- macOS: `~/Library/Application Support/ResolveBanglaSubtitles/settings.json`
+- Linux: `~/.config/resolve_bangla_subtitles/settings.json`
+
+Override the location with `RBS_CONFIG`. Values are clamped to valid ranges on
+load, so a stale or hand-edited file can never break the UI.
+
+## DaVinci Resolve 21
+
+Resolve 21 is fully supported. Module discovery probes every product folder
+Blackmagic ships (`DaVinci Resolve`, `DaVinci Resolve Studio`,
+`DaVinci Resolve 21`, `DaVinci Resolve 20`) across ProgramData, %APPDATA%, both
+Program Files roots, `/Library/Application Support`, per-user macOS paths and
+`/opt/resolve`, and auto-fills `RESOLVE_SCRIPT_API` / `RESOLVE_SCRIPT_LIB` from
+the first candidate that exists.
