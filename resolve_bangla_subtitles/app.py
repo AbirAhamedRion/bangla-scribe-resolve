@@ -29,15 +29,19 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QSizePolicy,
+    QSlider,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
 import ai_engine
+import bn_srt
 import pipeline
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-STEPS = ["Export audio", "Transcribe", "Build SRT", "Import"]
+STEPS = ["Export audio", "Transcribe", "Format SRT", "Place on timeline"]
+
 
 
 # --------------------------------------------------------------------------
@@ -63,9 +67,13 @@ class Worker(QObject):
                 prefer_gpu=self.options["gpu"],
                 keep_srt_copy=True,
                 output_dir=self.options.get("output_dir") or None,
+                max_chars=self.options["max_chars"],
+                max_lines=self.options["max_lines"],
+                place_on_timeline=self.options["place"],
                 progress=lambda m, p: self.progress.emit(m, p),
                 cancelled=lambda: self._cancel,
             )
+
             self.finished.emit(result)
         except Exception as exc:  # surfaced in the UI, never silently swallowed
             self.failed.emit(f"{exc}\n\n{traceback.format_exc(limit=3)}")
@@ -232,6 +240,44 @@ class MainWindow(QWidget):
 
         col.addWidget(divider())
 
+        fmt_head = QLabel("Subtitle formatting")
+        fmt_head.setObjectName("CardTitle")
+        col.addWidget(fmt_head)
+
+        fmt_row = QHBoxLayout()
+        fmt_row.setSpacing(12)
+        chars_lbl = QLabel("Max characters per line")
+        chars_lbl.setObjectName("Muted")
+        self.chars_slider = QSlider(Qt.Orientation.Horizontal)
+        self.chars_slider.setRange(20, 70)
+        self.chars_slider.setValue(bn_srt.DEFAULT_MAX_CHARS)
+        self.chars_value = QLabel(str(bn_srt.DEFAULT_MAX_CHARS))
+        self.chars_value.setObjectName("Muted")
+        self.chars_value.setMinimumWidth(24)
+        self.chars_slider.valueChanged.connect(
+            lambda v: self.chars_value.setText(str(v))
+        )
+        fmt_row.addWidget(chars_lbl)
+        fmt_row.addWidget(self.chars_slider, 1)
+        fmt_row.addWidget(self.chars_value)
+
+        lines_lbl = QLabel("Lines")
+        lines_lbl.setObjectName("Muted")
+        self.lines_spin = QSpinBox()
+        self.lines_spin.setRange(1, 3)
+        self.lines_spin.setValue(bn_srt.DEFAULT_MAX_LINES)
+        fmt_row.addWidget(lines_lbl)
+        fmt_row.addWidget(self.lines_spin)
+        col.addLayout(fmt_row)
+
+        self.place_check = QCheckBox(
+            "Place subtitles on a subtitle track of the active timeline"
+        )
+        self.place_check.setChecked(True)
+        col.addWidget(self.place_check)
+
+        col.addWidget(divider())
+
         out_row = QHBoxLayout()
         out_row.setSpacing(12)
         out_lbl = QLabel("Save SRT to")
@@ -248,6 +294,7 @@ class MainWindow(QWidget):
         out_row.addWidget(self.out_value, 1)
         out_row.addWidget(browse)
         col.addLayout(out_row)
+
 
         note = QLabel(
             "Language is locked to Bengali (bn). Temporary WAV files are deleted "
@@ -335,7 +382,11 @@ class MainWindow(QWidget):
             "model": self.model_box.currentText(),
             "gpu": self.gpu_check.isChecked(),
             "output_dir": self.out_value.text(),
+            "max_chars": self.chars_slider.value(),
+            "max_lines": self.lines_spin.value(),
+            "place": self.place_check.isChecked(),
         }
+
         self.thread = QThread(self)
         self.worker = Worker(options)
         self.worker.moveToThread(self.thread)
@@ -360,11 +411,20 @@ class MainWindow(QWidget):
     def _on_finished(self, result: pipeline.PipelineResult) -> None:
         self.bar.setValue(100)
         self.steps.set_active(len(STEPS))
-        self._set_status(
-            f"Done — {result.segment_count} subtitle segments imported.", "ok"
+        tail = (
+            "placed on the timeline"
+            if result.placed_on_timeline
+            else "imported into the Media Pool"
         )
+        self._set_status(
+            f"Done — {result.segment_count} Bengali cues {tail}.",
+            "ok" if result.placed_on_timeline else "",
+        )
+        if result.message:
+            self._append(result.message)
         self._append(f"SRT saved to: {result.srt_path}")
         self._teardown()
+
 
     def _on_failed(self, message: str) -> None:
         self._set_status(message.splitlines()[0], "error")

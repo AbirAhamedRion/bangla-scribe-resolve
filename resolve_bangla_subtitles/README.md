@@ -2,16 +2,18 @@
 
 Local, offline Bengali subtitle generation for the active Resolve timeline.
 Audio is exported by Resolve, transcribed on your machine with
-`faster-whisper` (CTranslate2), written as `.srt`, and imported straight back
-into the Media Pool.
+`faster-whisper` (CTranslate2), formatted into clean Bengali cues, then
+imported **and placed automatically onto a subtitle track** of your timeline.
 
 ```
 app.py          PySide6 GUI (frameless dark glass UI, QSS in style.qss)
-pipeline.py     Orchestrates export -> transcribe -> SRT -> import -> cleanup
-resolve_api.py  All DaVinci Resolve scripting (render queue, media pool)
-ai_engine.py    faster-whisper wrapper + SRT writer
+pipeline.py     Orchestrates export -> transcribe -> format -> place -> cleanup
+resolve_api.py  All DaVinci Resolve scripting (render queue, subtitle track)
+ai_engine.py    faster-whisper wrapper
+bn_srt.py       Bengali punctuation, cue splitting, line wrapping, SRT output
 style.qss       Premium dark theme
 ```
+
 
 ## 1. Requirements
 
@@ -67,9 +69,31 @@ python app.py          # GUI
 python pipeline.py     # headless CLI, same pipeline
 ```
 
-Click **Generate Bengali Subtitles**. When it finishes, the `.srt` appears in
-the Media Pool — drag it onto a subtitle track and style it once from the
-Inspector to format every caption at the same time.
+Click **Generate Bengali Subtitles**. The app adds a subtitle track if your
+timeline has none, imports the `.srt` and drops it on that track for you — no
+dragging. Select the track and style it once from the Inspector to format every
+caption at the same time.
+
+### Formatting controls
+
+- **Max characters per line** (20–70, default 42) — the readability budget for
+  each line.
+- **Lines** (1–3, default 2) — maximum rows per caption.
+- **Place subtitles on the timeline** — turn off if you only want the SRT in
+  the Media Pool.
+
+What the formatter does (`bn_srt.py`):
+
+- normalises Bengali punctuation: Latin `.` after Bengali text becomes a danda
+  `।`, `...` becomes `…`, `।।` becomes `॥`, spacing around punctuation is
+  fixed, and ZWSP/BOM noise is stripped
+- splits over-long Whisper segments at sentence (`। ॥ ? ! …`) and then clause
+  (`, ; : —`) boundaries, re-timing each new cue in proportion to its length
+- wraps lines only at safe break points — never before a matra, hasant (্),
+  ZWJ/ZWNJ or trailing punctuation, so conjuncts never split — and balances
+  two-line cues so the rows are similar lengths
+- enforces a 0.7 s minimum / 7 s maximum cue duration and removes overlaps
+
 
 ## 5. Where to place the scripts (optional Resolve menu entry)
 
@@ -95,8 +119,13 @@ subprocess.Popen([PYTHON, os.path.join(PLUGIN, "app.py")], cwd=PLUGIN)
 
 - **Language is locked to `bn`** and `condition_on_previous_text` is disabled,
   which prevents the repetition loops Whisper falls into on Bengali speech.
+- **Timeline placement:** the app appends to a subtitle track via the Media
+  Pool, falling back to `Timeline.ImportIntoTimeline()`. If an older Resolve
+  build refuses both, it says so and the clip is still waiting in the Media
+  Pool to drag manually.
 - **Cleanup:** the temporary WAV and the temp copy of the SRT are always
   deleted. The imported SRT itself is kept in your chosen folder — Resolve
   links to it on disk, so deleting it would make the Media Pool clip offline.
+
 - The render queue is cleared before and after each run; existing jobs are
   removed, so queue anything you need after generating subtitles.

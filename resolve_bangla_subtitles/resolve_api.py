@@ -246,9 +246,9 @@ def _find_rendered_file(out_dir: str, base_name: str) -> Optional[str]:
 
 
 # --------------------------------------------------------------------------
-# Step C - import the SRT into the Media Pool
+# Step C - import the SRT and place it on a subtitle track
 # --------------------------------------------------------------------------
-def import_srt(ctx: ResolveContext, srt_path: str) -> bool:
+def import_srt(ctx: ResolveContext, srt_path: str):
     """Import the generated .srt into the current Media Pool folder."""
     media_pool = ctx.project.GetMediaPool()
     try:
@@ -256,4 +256,92 @@ def import_srt(ctx: ResolveContext, srt_path: str) -> bool:
     except Exception:
         pass
     items = media_pool.ImportMedia([srt_path])
-    return bool(items)
+    if not items:
+        return None
+    return items[0]
+
+
+def ensure_subtitle_track(ctx: ResolveContext) -> int:
+    """Return the index of a subtitle track, adding one if the timeline has none."""
+    timeline = ctx.timeline
+    try:
+        count = int(timeline.GetTrackCount("subtitle") or 0)
+    except Exception:
+        count = 0
+    if count == 0:
+        try:
+            timeline.AddTrack("subtitle")
+        except Exception as exc:
+            raise RuntimeError(f"Could not add a subtitle track: {exc}")
+        try:
+            count = int(timeline.GetTrackCount("subtitle") or 1)
+        except Exception:
+            count = 1
+    return max(1, count)
+
+
+def place_srt_on_timeline(
+    ctx: ResolveContext,
+    srt_path: str,
+    progress: Optional[ProgressFn] = None,
+) -> tuple[bool, str]:
+    """
+    Import the SRT and drop it onto a subtitle track of the active timeline.
+
+    Returns (placed, message). `placed` is False when Resolve imported the file
+    but refused the automatic edit — the caller should then tell the user to
+    drag it from the Media Pool.
+    """
+
+    def say(msg: str, pct: int) -> None:
+        if progress:
+            progress(msg, pct)
+
+    say("Importing subtitles into the Media Pool…", 90)
+    item = import_srt(ctx, srt_path)
+    if item is None:
+        raise RuntimeError(
+            f"Resolve could not import the SRT. It is still on disk at: {srt_path}"
+        )
+
+    say("Placing subtitles on the timeline…", 94)
+    track_index = ensure_subtitle_track(ctx)
+    media_pool = ctx.project.GetMediaPool()
+
+    # Preferred path: an explicit subtitle-track append (Resolve 18.5+).
+    clip_info = {
+        "mediaPoolItem": item,
+        "startFrame": 0,
+        "trackIndex": track_index,
+        "mediaType": 3,  # 1 = video, 2 = audio, 3 = subtitle
+    }
+    for info in (clip_info, {k: v for k, v in clip_info.items() if k != "mediaType"}):
+        try:
+            appended = media_pool.AppendToTimeline([info])
+        except Exception:
+            appended = None
+        if appended:
+            return True, f"Subtitles placed on subtitle track {track_index}."
+
+    # Fallback: let Resolve import the file straight into the timeline.
+    for options in (
+        {"importSubtitle": True, "autoImportSourceClipsIntoMediaPool": False},
+        None,
+    ):
+        try:
+            ok = (
+                ctx.timeline.ImportIntoTimeline(srt_path, options)
+                if options is not None
+                else ctx.timeline.ImportIntoTimeline(srt_path)
+            )
+        except Exception:
+            ok = False
+        if ok:
+            return True, "Subtitles imported into the timeline."
+
+    return (
+        False,
+        "The SRT is in the Media Pool, but this Resolve build refused the "
+        "automatic edit — drag it onto a subtitle track to finish.",
+    )
+
