@@ -206,7 +206,7 @@ def get_resolve():
     if dvr is None:
         raise RuntimeError(
             "Could not import DaVinciResolveScript.\n"
-            "Make sure DaVinci Resolve (18, 19 or 20) is installed and that "
+            "Make sure DaVinci Resolve (18 through 21) is installed and that "
             "external scripting is enabled: Preferences > System > General > "
             "'External scripting using' = Local.\n"
             f"Underlying error: {last_err}"
