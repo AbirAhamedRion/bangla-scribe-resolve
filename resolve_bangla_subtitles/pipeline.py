@@ -43,6 +43,8 @@ class PipelineResult:
     cancelled: bool = False
     repair_summary: str = ""
     trim_summary: str = ""
+    cache_summary: str = ""
+    reused_transcript: bool = False
 
 
 def run_pipeline(
