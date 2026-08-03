@@ -36,7 +36,9 @@ from PySide6.QtWidgets import (
 )
 
 import ai_engine
+import audio_trim
 import bn_srt
+import model_cache
 import pipeline
 from cancellation import CancelToken, Cancelled
 
