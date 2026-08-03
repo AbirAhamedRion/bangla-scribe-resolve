@@ -240,6 +240,44 @@ class MainWindow(QWidget):
 
         col.addWidget(divider())
 
+        fmt_head = QLabel("Subtitle formatting")
+        fmt_head.setObjectName("CardTitle")
+        col.addWidget(fmt_head)
+
+        fmt_row = QHBoxLayout()
+        fmt_row.setSpacing(12)
+        chars_lbl = QLabel("Max characters per line")
+        chars_lbl.setObjectName("Muted")
+        self.chars_slider = QSlider(Qt.Orientation.Horizontal)
+        self.chars_slider.setRange(20, 70)
+        self.chars_slider.setValue(bn_srt.DEFAULT_MAX_CHARS)
+        self.chars_value = QLabel(str(bn_srt.DEFAULT_MAX_CHARS))
+        self.chars_value.setObjectName("Muted")
+        self.chars_value.setMinimumWidth(24)
+        self.chars_slider.valueChanged.connect(
+            lambda v: self.chars_value.setText(str(v))
+        )
+        fmt_row.addWidget(chars_lbl)
+        fmt_row.addWidget(self.chars_slider, 1)
+        fmt_row.addWidget(self.chars_value)
+
+        lines_lbl = QLabel("Lines")
+        lines_lbl.setObjectName("Muted")
+        self.lines_spin = QSpinBox()
+        self.lines_spin.setRange(1, 3)
+        self.lines_spin.setValue(bn_srt.DEFAULT_MAX_LINES)
+        fmt_row.addWidget(lines_lbl)
+        fmt_row.addWidget(self.lines_spin)
+        col.addLayout(fmt_row)
+
+        self.place_check = QCheckBox(
+            "Place subtitles on a subtitle track of the active timeline"
+        )
+        self.place_check.setChecked(True)
+        col.addWidget(self.place_check)
+
+        col.addWidget(divider())
+
         out_row = QHBoxLayout()
         out_row.setSpacing(12)
         out_lbl = QLabel("Save SRT to")
@@ -256,6 +294,7 @@ class MainWindow(QWidget):
         out_row.addWidget(self.out_value, 1)
         out_row.addWidget(browse)
         col.addLayout(out_row)
+
 
         note = QLabel(
             "Language is locked to Bengali (bn). Temporary WAV files are deleted "
