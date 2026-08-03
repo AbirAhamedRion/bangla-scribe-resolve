@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Callable, Iterable, List, Optional
+from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
 import bn_srt
+import model_cache
 from cancellation import Cancelled, as_token
 
 
