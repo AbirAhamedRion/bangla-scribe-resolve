@@ -34,53 +34,73 @@ def _candidate_module_paths() -> list[str]:
     Covers Resolve 17 through the current 19.x / 20.x builds, including the
     per-user Fusion path Blackmagic added for the newer installers and the
     portable "Studio"-suffixed folders.
+
+    Resolve 21 keeps the same layout but ships more product-named folders
+    (``DaVinci Resolve Studio``, ``DaVinci Resolve 21``), so every known
+    variant is probed.
     """
     paths: list[str] = []
     env = os.environ.get("RESOLVE_SCRIPT_API")
     if env:
         paths.append(os.path.join(env, "Modules"))
 
+    products = (
+        "DaVinci Resolve",
+        "DaVinci Resolve Studio",
+        "DaVinci Resolve 21",
+        "DaVinci Resolve 20",
+    )
+
     if sys.platform.startswith("win"):
         pd = os.environ.get("PROGRAMDATA", r"C:\ProgramData")
         appdata = os.environ.get("APPDATA", "")
-        pf = os.environ.get("PROGRAMFILES", r"C:\Program Files")
-        for product in ("DaVinci Resolve", "DaVinci Resolve Studio"):
+        pfs = [
+            os.environ.get("PROGRAMFILES", r"C:\Program Files"),
+            os.environ.get("ProgramW6432", r"C:\Program Files"),
+        ]
+        for product in products:
             paths.append(
                 os.path.join(
                     pd, "Blackmagic Design", product,
                     "Support", "Developer", "Scripting", "Modules",
                 )
             )
-        if appdata:
-            paths.append(
-                os.path.join(
-                    appdata, "Blackmagic Design", "DaVinci Resolve",
-                    "Support", "Developer", "Scripting", "Modules",
+            if appdata:
+                paths.append(
+                    os.path.join(
+                        appdata, "Blackmagic Design", product,
+                        "Support", "Developer", "Scripting", "Modules",
+                    )
                 )
-            )
+            for pf in pfs:
+                paths.append(
+                    os.path.join(
+                        pf, "Blackmagic Design", product,
+                        "Developer", "Scripting", "Modules",
+                    )
+                )
+        if appdata:
             paths.append(
                 os.path.join(appdata, "Blackmagic Design", "Fusion", "Modules")
             )
-        paths.append(
-            os.path.join(
-                pf, "Blackmagic Design", "DaVinci Resolve",
-                "Developer", "Scripting", "Modules",
-            )
-        )
     elif sys.platform == "darwin":
-        paths.append(
-            "/Library/Application Support/Blackmagic Design/DaVinci Resolve/"
-            "Developer/Scripting/Modules"
-        )
-        paths.append(
-            os.path.expanduser(
-                "~/Library/Application Support/Blackmagic Design/DaVinci Resolve/"
-                "Developer/Scripting/Modules"
+        for product in products:
+            paths.append(
+                "/Library/Application Support/Blackmagic Design/"
+                f"{product}/Developer/Scripting/Modules"
             )
-        )
-        paths.append("/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Libraries/Fusion")
+            paths.append(
+                os.path.expanduser(
+                    "~/Library/Application Support/Blackmagic Design/"
+                    f"{product}/Developer/Scripting/Modules"
+                )
+            )
+            paths.append(
+                f"/Applications/{product}/{product}.app/Contents/Libraries/Fusion"
+            )
     else:  # Linux
         paths.append("/opt/resolve/Developer/Scripting/Modules")
+        paths.append("/opt/resolve/libs/Fusion/Modules")
         paths.append("/home/resolve/Developer/Scripting/Modules")
         paths.append(os.path.expanduser("~/.local/share/DaVinciResolve/Developer/Scripting/Modules"))
     return paths
@@ -88,37 +108,71 @@ def _candidate_module_paths() -> list[str]:
 
 def _ensure_library_env() -> None:
     """
-    Newer Resolve builds need RESOLVE_SCRIPT_API / RESOLVE_SCRIPT_LIB to be set
-    before DaVinciResolveScript can locate fusionscript. Fill in sane defaults
-    when the installer did not export them (common on Windows and macOS).
+    Newer Resolve builds (19, 20 and 21) need RESOLVE_SCRIPT_API /
+    RESOLVE_SCRIPT_LIB to be set before DaVinciResolveScript can locate
+    fusionscript. Fill in sane defaults when the installer did not export them
+    (common on Windows and macOS), trying every product folder in turn.
     """
+    products = (
+        "DaVinci Resolve",
+        "DaVinci Resolve Studio",
+        "DaVinci Resolve 21",
+        "DaVinci Resolve 20",
+    )
+    api_candidates: list[str] = []
+    lib_candidates: list[str] = []
+
     if sys.platform.startswith("win"):
         pd = os.environ.get("PROGRAMDATA", r"C:\ProgramData")
-        api = os.path.join(
-            pd, "Blackmagic Design", "DaVinci Resolve",
-            "Support", "Developer", "Scripting",
-        )
-        lib = os.path.join(
+        appdata = os.environ.get("APPDATA", "")
+        pfs = [
             os.environ.get("PROGRAMFILES", r"C:\Program Files"),
-            "Blackmagic Design", "DaVinci Resolve", "fusionscript.dll",
-        )
+            os.environ.get("ProgramW6432", r"C:\Program Files"),
+        ]
+        for product in products:
+            api_candidates.append(
+                os.path.join(
+                    pd, "Blackmagic Design", product,
+                    "Support", "Developer", "Scripting",
+                )
+            )
+            if appdata:
+                api_candidates.append(
+                    os.path.join(
+                        appdata, "Blackmagic Design", product,
+                        "Support", "Developer", "Scripting",
+                    )
+                )
+            for pf in pfs:
+                lib_candidates.append(
+                    os.path.join(
+                        pf, "Blackmagic Design", product, "fusionscript.dll"
+                    )
+                )
     elif sys.platform == "darwin":
-        api = (
-            "/Library/Application Support/Blackmagic Design/DaVinci Resolve/"
-            "Developer/Scripting"
-        )
-        lib = (
-            "/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/"
-            "Libraries/Fusion/fusionscript.so"
-        )
+        for product in products:
+            api_candidates.append(
+                "/Library/Application Support/Blackmagic Design/"
+                f"{product}/Developer/Scripting"
+            )
+            lib_candidates.append(
+                f"/Applications/{product}/{product}.app/Contents/"
+                "Libraries/Fusion/fusionscript.so"
+            )
     else:
-        api = "/opt/resolve/Developer/Scripting"
-        lib = "/opt/resolve/libs/Fusion/fusionscript.so"
+        api_candidates.append("/opt/resolve/Developer/Scripting")
+        lib_candidates.append("/opt/resolve/libs/Fusion/fusionscript.so")
 
-    if not os.environ.get("RESOLVE_SCRIPT_API") and os.path.isdir(api):
-        os.environ["RESOLVE_SCRIPT_API"] = api
-    if not os.environ.get("RESOLVE_SCRIPT_LIB") and os.path.isfile(lib):
-        os.environ["RESOLVE_SCRIPT_LIB"] = lib
+    if not os.environ.get("RESOLVE_SCRIPT_API"):
+        for api in api_candidates:
+            if os.path.isdir(api):
+                os.environ["RESOLVE_SCRIPT_API"] = api
+                break
+    if not os.environ.get("RESOLVE_SCRIPT_LIB"):
+        for lib in lib_candidates:
+            if os.path.isfile(lib):
+                os.environ["RESOLVE_SCRIPT_LIB"] = lib
+                break
 
 
 
