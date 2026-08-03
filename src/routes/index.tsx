@@ -74,6 +74,16 @@ const FEATURES = [
   },
   {
     kicker: "09",
+    title: "Instant re-runs with transcript reuse",
+    body: "The exported WAV is fingerprinted alongside your engine settings, so re-running an unchanged timeline replays the stored transcript instead of decoding again — retune line length or lines per cue in seconds.",
+  },
+  {
+    kicker: "10",
+    title: "Your settings, remembered",
+    body: "Model, GPU toggle, silence trim and threshold, character and line limits, placement, output folder and window size are saved to a local config file and restored on next launch.",
+  },
+  {
+    kicker: "11",
     title: "Private by construction",
     body: "No cloud APIs, no telemetry, no account. Audio and transcripts never leave the machine, and temporary WAV files are deleted after every run.",
   },
@@ -109,7 +119,7 @@ const FAQ = [
   },
   {
     q: "Which Resolve versions are supported?",
-    a: "Resolve 18, 18.5, 19 and 20. The plugin auto-discovers the scripting modules on Windows, macOS and Linux — including the newer per-user Fusion module paths — and falls back to the bare fusionscript module when DaVinciResolveScript is missing.",
+    a: "Resolve 18, 18.5, 19, 20 and 21. The plugin auto-discovers the scripting modules on Windows, macOS and Linux — including the newer per-user Fusion module paths — and falls back to the bare fusionscript module when DaVinciResolveScript is missing.",
   },
   {
     q: "How long does a transcription take?",
@@ -372,7 +382,7 @@ _atomic_write(srt_path, srt_text)       # never a truncated .srt`}
               {[
                 {
                   t: "Resolve 18 → 20",
-                  b: "Version detection via GetVersion(), subtitle-track append with mediaType 3 on 18.5+, and an ImportIntoTimeline fallback for older builds.",
+                  b: "Version detection via GetVersion(), module discovery across every Resolve 18-21 product folder, subtitle-track append with mediaType 3 on 18.5+, and an ImportIntoTimeline fallback for older builds.",
                 },
                 {
                   t: "Windows · macOS · Linux",

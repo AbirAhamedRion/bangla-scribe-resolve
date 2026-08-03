@@ -92,7 +92,7 @@ function Guide() {
           <section id="requirements" className="mt-14">
             <h2 className="font-display text-2xl font-semibold">1. Requirements</h2>
             <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
-              <li>• DaVinci Resolve <strong className="text-foreground">Studio</strong> 18, 18.5, 19 or 20 (external scripting is a Studio feature).</li>
+              <li>• DaVinci Resolve <strong className="text-foreground">Studio</strong> 18, 18.5, 19, 20 or 21 (external scripting is a Studio feature).</li>
               <li>• Python 3.10 – 3.12, 64-bit.</li>
               <li>• 8 GB RAM minimum for <span className="font-mono">large-v3</span> on CPU (16 GB comfortable); a CUDA GPU with 6 GB VRAM is optional but much faster.</li>
               <li>• ~3 GB free disk for the model cache, plus temp space for the exported WAV.</li>

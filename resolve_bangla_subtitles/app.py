@@ -40,6 +40,8 @@ import audio_trim
 import bn_srt
 import model_cache
 import pipeline
+import settings_store
+import transcript_cache
 from cancellation import CancelToken, Cancelled
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -77,6 +79,7 @@ class Worker(QObject):
                 place_on_timeline=self.options["place"],
                 trim_silence=self.options["trim"],
                 silence_threshold_db=self.options["threshold_db"],
+                reuse_transcript=self.options.get("reuse_transcript", True),
                 progress=lambda m, p: self.progress.emit(m, p),
                 cancelled=self.token,
             )
@@ -154,7 +157,12 @@ class MainWindow(QWidget):
         self.setWindowTitle("Bangla Subtitle Studio")
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.resize(620, 640)
+        # Restore the previous session's options before any widget is built,
+        # so every control can be constructed with its saved value.
+        self.settings = settings_store.load()
+        self.resize(
+            int(self.settings["window"]["w"]), int(self.settings["window"]["h"])
+        )
         self._drag: QPoint | None = None
         self.thread: QThread | None = None
         self.worker: Worker | None = None
@@ -240,7 +248,9 @@ class MainWindow(QWidget):
         model_lbl.setObjectName("Muted")
         self.model_box = QComboBox()
         self.model_box.addItems(["large-v3", "medium", "small"])
-        self.model_box.setCurrentText(ai_engine.DEFAULT_MODEL)
+        self.model_box.setCurrentText(
+            self.settings.get("model", ai_engine.DEFAULT_MODEL)
+        )
         self.model_box.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
@@ -248,7 +258,7 @@ class MainWindow(QWidget):
         row.addWidget(self.model_box, 1)
 
         self.gpu_check = QCheckBox("Use GPU when available")
-        self.gpu_check.setChecked(True)
+        self.gpu_check.setChecked(bool(self.settings.get("gpu", True)))
         row.addWidget(self.gpu_check)
         col.addLayout(row)
 
@@ -268,7 +278,28 @@ class MainWindow(QWidget):
         self.model_box.currentTextChanged.connect(lambda _=None: self._refresh_cache())
         self._refresh_cache()
 
+        # Transcript reuse — the same timeline audio never gets transcribed twice.
+        self.reuse_check = QCheckBox(
+            "Reuse the cached transcript when the timeline audio is unchanged"
+        )
+        self.reuse_check.setChecked(bool(self.settings.get("reuse_transcript", True)))
+        col.addWidget(self.reuse_check)
+
+        tr_row = QHBoxLayout()
+        tr_row.setSpacing(12)
+        self.transcript_label = QLabel()
+        self.transcript_label.setObjectName("Muted")
+        self.transcript_label.setWordWrap(True)
+        forget_btn = QPushButton("Clear transcripts")
+        forget_btn.setObjectName("Ghost")
+        forget_btn.clicked.connect(self._clear_transcripts)
+        tr_row.addWidget(self.transcript_label, 1)
+        tr_row.addWidget(forget_btn)
+        col.addLayout(tr_row)
+        self._refresh_transcripts()
+
         col.addWidget(divider())
+
 
         audio_head = QLabel("Audio")
         audio_head.setObjectName("CardTitle")
@@ -277,17 +308,19 @@ class MainWindow(QWidget):
         self.trim_check = QCheckBox(
             "Trim leading and trailing silence before transcribing"
         )
-        self.trim_check.setChecked(True)
+        self.trim_check.setChecked(bool(self.settings.get("trim", True)))
         col.addWidget(self.trim_check)
 
         trim_row = QHBoxLayout()
         trim_row.setSpacing(12)
         thr_lbl = QLabel("Silence threshold")
         thr_lbl.setObjectName("Muted")
+        saved_db = int(self.settings.get("threshold_db", audio_trim.DEFAULT_THRESHOLD_DB))
         self.threshold_slider = QSlider(Qt.Orientation.Horizontal)
         self.threshold_slider.setRange(-70, -25)
-        self.threshold_slider.setValue(int(audio_trim.DEFAULT_THRESHOLD_DB))
-        self.threshold_value = QLabel(f"{int(audio_trim.DEFAULT_THRESHOLD_DB)} dB")
+        self.threshold_slider.setValue(saved_db)
+        self.threshold_slider.setEnabled(self.trim_check.isChecked())
+        self.threshold_value = QLabel(f"{saved_db} dB")
         self.threshold_value.setObjectName("Muted")
         self.threshold_value.setMinimumWidth(52)
         self.threshold_slider.valueChanged.connect(
@@ -309,10 +342,11 @@ class MainWindow(QWidget):
         fmt_row.setSpacing(12)
         chars_lbl = QLabel("Max characters per line")
         chars_lbl.setObjectName("Muted")
+        saved_chars = int(self.settings.get("max_chars", bn_srt.DEFAULT_MAX_CHARS))
         self.chars_slider = QSlider(Qt.Orientation.Horizontal)
         self.chars_slider.setRange(20, 70)
-        self.chars_slider.setValue(bn_srt.DEFAULT_MAX_CHARS)
-        self.chars_value = QLabel(str(bn_srt.DEFAULT_MAX_CHARS))
+        self.chars_slider.setValue(saved_chars)
+        self.chars_value = QLabel(str(saved_chars))
         self.chars_value.setObjectName("Muted")
         self.chars_value.setMinimumWidth(24)
         self.chars_slider.valueChanged.connect(
@@ -326,7 +360,9 @@ class MainWindow(QWidget):
         lines_lbl.setObjectName("Muted")
         self.lines_spin = QSpinBox()
         self.lines_spin.setRange(1, 3)
-        self.lines_spin.setValue(bn_srt.DEFAULT_MAX_LINES)
+        self.lines_spin.setValue(
+            int(self.settings.get("max_lines", bn_srt.DEFAULT_MAX_LINES))
+        )
         fmt_row.addWidget(lines_lbl)
         fmt_row.addWidget(self.lines_spin)
         col.addLayout(fmt_row)
@@ -334,7 +370,7 @@ class MainWindow(QWidget):
         self.place_check = QCheckBox(
             "Place subtitles on a subtitle track of the active timeline"
         )
-        self.place_check.setChecked(True)
+        self.place_check.setChecked(bool(self.settings.get("place", True)))
         col.addWidget(self.place_check)
 
         col.addWidget(divider())
@@ -344,7 +380,10 @@ class MainWindow(QWidget):
         out_lbl = QLabel("Save SRT to")
         out_lbl.setObjectName("Muted")
         self.out_value = QLabel(
-            os.path.join(os.path.expanduser("~"), "Documents", "Resolve Bangla Subtitles")
+            self.settings.get("output_dir")
+            or os.path.join(
+                os.path.expanduser("~"), "Documents", "Resolve Bangla Subtitles"
+            )
         )
         self.out_value.setObjectName("Muted")
         self.out_value.setWordWrap(True)
@@ -359,7 +398,8 @@ class MainWindow(QWidget):
 
         note = QLabel(
             "Language is locked to Bengali (bn). Temporary WAV files are deleted "
-            "automatically after each run."
+            "automatically after each run, and these options are remembered for "
+            "next time."
         )
         note.setObjectName("Muted")
         note.setWordWrap(True)
@@ -440,6 +480,46 @@ class MainWindow(QWidget):
         self._append(f"Cleared cached weights for {name}.")
         self._refresh_cache()
 
+    def _refresh_transcripts(self) -> None:
+        """Show how many past transcriptions can be replayed instantly."""
+        count = transcript_cache.entry_count()
+        if count:
+            self.transcript_label.setText(
+                f"{count} cached transcript{'s' if count != 1 else ''} — an "
+                "unchanged timeline re-renders subtitles in seconds."
+            )
+        else:
+            self.transcript_label.setText(
+                "No cached transcripts yet — the first run of each timeline is "
+                "stored so repeats skip Whisper."
+            )
+
+    def _clear_transcripts(self) -> None:
+        removed = transcript_cache.clear()
+        self._append(f"Cleared {removed} cached transcript(s).")
+        self._refresh_transcripts()
+
+    # -- settings persistence ---------------------------------------------
+    def _current_options(self) -> dict:
+        return {
+            "model": self.model_box.currentText(),
+            "gpu": self.gpu_check.isChecked(),
+            "output_dir": self.out_value.text(),
+            "max_chars": self.chars_slider.value(),
+            "max_lines": self.lines_spin.value(),
+            "place": self.place_check.isChecked(),
+            "trim": self.trim_check.isChecked(),
+            "threshold_db": int(self.threshold_slider.value()),
+            "reuse_transcript": self.reuse_check.isChecked(),
+            "window": {"w": self.width(), "h": self.height()},
+        }
+
+    def _save_settings(self) -> None:
+        self.settings = self._current_options()
+        settings_store.save(self.settings)
+
+
+
 
     def _append(self, msg: str) -> None:
         self.log.appendPlainText(msg)
@@ -463,16 +543,10 @@ class MainWindow(QWidget):
         self.cancel_btn.setText("Cancel")
         self._set_status("Starting…")
 
-        options = {
-            "model": self.model_box.currentText(),
-            "gpu": self.gpu_check.isChecked(),
-            "output_dir": self.out_value.text(),
-            "max_chars": self.chars_slider.value(),
-            "max_lines": self.lines_spin.value(),
-            "place": self.place_check.isChecked(),
-            "trim": self.trim_check.isChecked(),
-            "threshold_db": float(self.threshold_slider.value()),
-        }
+        # Persist first, so a crash mid-run never loses the chosen options.
+        self._save_settings()
+        options = dict(self.settings)
+        options["threshold_db"] = float(self.threshold_slider.value())
 
         self.token = CancelToken()
         self.thread = QThread(self)
@@ -529,6 +603,8 @@ class MainWindow(QWidget):
             f"Done — {result.segment_count} Bengali cues {tail}.",
             "ok" if result.placed_on_timeline else "",
         )
+        if result.cache_summary:
+            self._append(result.cache_summary)
         if result.trim_summary:
             self._append(result.trim_summary)
         if result.repair_summary:
@@ -537,6 +613,7 @@ class MainWindow(QWidget):
             self._append(result.message)
         self._append(f"SRT saved to: {result.srt_path}")
         self._refresh_cache()
+        self._refresh_transcripts()
         self._teardown()
 
 
@@ -558,6 +635,7 @@ class MainWindow(QWidget):
 
     def closeEvent(self, event) -> None:
         """Closing mid-run cancels first so Resolve is never left rendering."""
+        self._save_settings()
         if self.worker:
             self.worker.cancel()
             if self.thread:
