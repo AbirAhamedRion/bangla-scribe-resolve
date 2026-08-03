@@ -342,10 +342,11 @@ class MainWindow(QWidget):
         fmt_row.setSpacing(12)
         chars_lbl = QLabel("Max characters per line")
         chars_lbl.setObjectName("Muted")
+        saved_chars = int(self.settings.get("max_chars", bn_srt.DEFAULT_MAX_CHARS))
         self.chars_slider = QSlider(Qt.Orientation.Horizontal)
         self.chars_slider.setRange(20, 70)
-        self.chars_slider.setValue(bn_srt.DEFAULT_MAX_CHARS)
-        self.chars_value = QLabel(str(bn_srt.DEFAULT_MAX_CHARS))
+        self.chars_slider.setValue(saved_chars)
+        self.chars_value = QLabel(str(saved_chars))
         self.chars_value.setObjectName("Muted")
         self.chars_value.setMinimumWidth(24)
         self.chars_slider.valueChanged.connect(
@@ -359,7 +360,9 @@ class MainWindow(QWidget):
         lines_lbl.setObjectName("Muted")
         self.lines_spin = QSpinBox()
         self.lines_spin.setRange(1, 3)
-        self.lines_spin.setValue(bn_srt.DEFAULT_MAX_LINES)
+        self.lines_spin.setValue(
+            int(self.settings.get("max_lines", bn_srt.DEFAULT_MAX_LINES))
+        )
         fmt_row.addWidget(lines_lbl)
         fmt_row.addWidget(self.lines_spin)
         col.addLayout(fmt_row)
@@ -367,7 +370,7 @@ class MainWindow(QWidget):
         self.place_check = QCheckBox(
             "Place subtitles on a subtitle track of the active timeline"
         )
-        self.place_check.setChecked(True)
+        self.place_check.setChecked(bool(self.settings.get("place", True)))
         col.addWidget(self.place_check)
 
         col.addWidget(divider())
@@ -377,7 +380,10 @@ class MainWindow(QWidget):
         out_lbl = QLabel("Save SRT to")
         out_lbl.setObjectName("Muted")
         self.out_value = QLabel(
-            os.path.join(os.path.expanduser("~"), "Documents", "Resolve Bangla Subtitles")
+            self.settings.get("output_dir")
+            or os.path.join(
+                os.path.expanduser("~"), "Documents", "Resolve Bangla Subtitles"
+            )
         )
         self.out_value.setObjectName("Muted")
         self.out_value.setWordWrap(True)
