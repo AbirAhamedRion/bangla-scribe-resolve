@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from typing import Callable, Iterable, List, Optional
 
 import bn_srt
+from cancellation import Cancelled, as_token
+
 
 
 ProgressFn = Callable[[str, int], None]
