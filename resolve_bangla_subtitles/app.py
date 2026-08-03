@@ -418,6 +418,29 @@ class MainWindow(QWidget):
         if d:
             self.out_value.setText(d)
 
+    def _refresh_cache(self) -> None:
+        """Show whether the selected model is already on disk."""
+        name = self.model_box.currentText()
+        if model_cache.is_cached(name):
+            gb = model_cache.cached_size_bytes(name) / 1_073_741_824
+            self.cache_label.setText(
+                f"✓ {name} cached ({gb:.1f} GB) — this run starts immediately."
+            )
+        else:
+            approx = model_cache.APPROX_SIZE_GB.get(name, 1.0)
+            self.cache_label.setText(
+                f"{name} is not cached yet — first run downloads ~{approx:.1f} GB "
+                "once, with progress shown below."
+            )
+
+    def _clear_cache(self) -> None:
+        name = self.model_box.currentText()
+        model_cache.clear_cache(name)
+        ai_engine.release_transcribers()
+        self._append(f"Cleared cached weights for {name}.")
+        self._refresh_cache()
+
+
     def _append(self, msg: str) -> None:
         self.log.appendPlainText(msg)
 
