@@ -398,7 +398,8 @@ class MainWindow(QWidget):
 
         note = QLabel(
             "Language is locked to Bengali (bn). Temporary WAV files are deleted "
-            "automatically after each run."
+            "automatically after each run, and these options are remembered for "
+            "next time."
         )
         note.setObjectName("Muted")
         note.setWordWrap(True)
