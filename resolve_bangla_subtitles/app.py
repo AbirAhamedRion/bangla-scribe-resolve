@@ -29,15 +29,19 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QSizePolicy,
+    QSlider,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
 import ai_engine
+import bn_srt
 import pipeline
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-STEPS = ["Export audio", "Transcribe", "Build SRT", "Import"]
+STEPS = ["Export audio", "Transcribe", "Format SRT", "Place on timeline"]
+
 
 
 # --------------------------------------------------------------------------
