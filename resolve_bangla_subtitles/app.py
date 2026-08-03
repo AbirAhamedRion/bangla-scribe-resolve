@@ -75,6 +75,8 @@ class Worker(QObject):
                 max_chars=self.options["max_chars"],
                 max_lines=self.options["max_lines"],
                 place_on_timeline=self.options["place"],
+                trim_silence=self.options["trim"],
+                silence_threshold_db=self.options["threshold_db"],
                 progress=lambda m, p: self.progress.emit(m, p),
                 cancelled=self.token,
             )
