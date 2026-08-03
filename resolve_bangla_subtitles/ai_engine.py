@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from typing import Callable, Iterable, List, Optional
 
 import bn_srt
+from cancellation import Cancelled, as_token
+
 
 
 ProgressFn = Callable[[str, int], None]
@@ -94,10 +96,13 @@ class Transcriber:
         self,
         wav_path: str,
         progress: Optional[ProgressFn] = None,
-        cancelled: Optional[Callable[[], bool]] = None,
+        cancelled: Optional[object] = None,
         beam_size: int = 5,
     ) -> List[Segment]:
+        token = as_token(cancelled)
+        token.check("transcription")
         model = self.load(progress)
+        token.check("transcription")
 
         if progress:
             progress("Transcribing Bengali audio…", 40)
@@ -116,9 +121,13 @@ class Transcriber:
 
         total = float(getattr(info, "duration", 0.0) or 0.0)
         out: List[Segment] = []
+        # faster-whisper decodes lazily, so this loop is our cancellation point:
+        # it fires between segments, i.e. at most a second or two after Cancel.
         for seg in segments_iter:
-            if cancelled and cancelled():
-                raise RuntimeError("Transcription cancelled.")
+            if token.cancelled:
+                del segments_iter  # release the decoder before unwinding
+                raise Cancelled("Cancelled during transcription.")
+
             text = (seg.text or "").strip()
             if text:
                 out.append(Segment(float(seg.start), float(seg.end), text))

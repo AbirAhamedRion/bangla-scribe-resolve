@@ -19,6 +19,8 @@ import tempfile
 from dataclasses import dataclass
 from typing import Callable, Optional
 
+from cancellation import CancelToken, Cancelled, as_token
+
 ProgressFn = Callable[[str, int], None]  # (message, percent 0-100)
 
 
@@ -26,7 +28,13 @@ ProgressFn = Callable[[str, int], None]  # (message, percent 0-100)
 # Resolve module bootstrap
 # --------------------------------------------------------------------------
 def _candidate_module_paths() -> list[str]:
-    """Standard install locations of DaVinciResolveScript.py per OS."""
+    """
+    Standard install locations of DaVinciResolveScript.py per OS.
+
+    Covers Resolve 17 through the current 19.x / 20.x builds, including the
+    per-user Fusion path Blackmagic added for the newer installers and the
+    portable "Studio"-suffixed folders.
+    """
     paths: list[str] = []
     env = os.environ.get("RESOLVE_SCRIPT_API")
     if env:
@@ -34,15 +42,29 @@ def _candidate_module_paths() -> list[str]:
 
     if sys.platform.startswith("win"):
         pd = os.environ.get("PROGRAMDATA", r"C:\ProgramData")
+        appdata = os.environ.get("APPDATA", "")
+        pf = os.environ.get("PROGRAMFILES", r"C:\Program Files")
+        for product in ("DaVinci Resolve", "DaVinci Resolve Studio"):
+            paths.append(
+                os.path.join(
+                    pd, "Blackmagic Design", product,
+                    "Support", "Developer", "Scripting", "Modules",
+                )
+            )
+        if appdata:
+            paths.append(
+                os.path.join(
+                    appdata, "Blackmagic Design", "DaVinci Resolve",
+                    "Support", "Developer", "Scripting", "Modules",
+                )
+            )
+            paths.append(
+                os.path.join(appdata, "Blackmagic Design", "Fusion", "Modules")
+            )
         paths.append(
             os.path.join(
-                pd,
-                "Blackmagic Design",
-                "DaVinci Resolve",
-                "Support",
-                "Developer",
-                "Scripting",
-                "Modules",
+                pf, "Blackmagic Design", "DaVinci Resolve",
+                "Developer", "Scripting", "Modules",
             )
         )
     elif sys.platform == "darwin":
@@ -50,10 +72,54 @@ def _candidate_module_paths() -> list[str]:
             "/Library/Application Support/Blackmagic Design/DaVinci Resolve/"
             "Developer/Scripting/Modules"
         )
+        paths.append(
+            os.path.expanduser(
+                "~/Library/Application Support/Blackmagic Design/DaVinci Resolve/"
+                "Developer/Scripting/Modules"
+            )
+        )
+        paths.append("/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Libraries/Fusion")
     else:  # Linux
         paths.append("/opt/resolve/Developer/Scripting/Modules")
         paths.append("/home/resolve/Developer/Scripting/Modules")
+        paths.append(os.path.expanduser("~/.local/share/DaVinciResolve/Developer/Scripting/Modules"))
     return paths
+
+
+def _ensure_library_env() -> None:
+    """
+    Newer Resolve builds need RESOLVE_SCRIPT_API / RESOLVE_SCRIPT_LIB to be set
+    before DaVinciResolveScript can locate fusionscript. Fill in sane defaults
+    when the installer did not export them (common on Windows and macOS).
+    """
+    if sys.platform.startswith("win"):
+        pd = os.environ.get("PROGRAMDATA", r"C:\ProgramData")
+        api = os.path.join(
+            pd, "Blackmagic Design", "DaVinci Resolve",
+            "Support", "Developer", "Scripting",
+        )
+        lib = os.path.join(
+            os.environ.get("PROGRAMFILES", r"C:\Program Files"),
+            "Blackmagic Design", "DaVinci Resolve", "fusionscript.dll",
+        )
+    elif sys.platform == "darwin":
+        api = (
+            "/Library/Application Support/Blackmagic Design/DaVinci Resolve/"
+            "Developer/Scripting"
+        )
+        lib = (
+            "/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/"
+            "Libraries/Fusion/fusionscript.so"
+        )
+    else:
+        api = "/opt/resolve/Developer/Scripting"
+        lib = "/opt/resolve/libs/Fusion/fusionscript.so"
+
+    if not os.environ.get("RESOLVE_SCRIPT_API") and os.path.isdir(api):
+        os.environ["RESOLVE_SCRIPT_API"] = api
+    if not os.environ.get("RESOLVE_SCRIPT_LIB") and os.path.isfile(lib):
+        os.environ["RESOLVE_SCRIPT_LIB"] = lib
+
 
 
 def get_resolve():
@@ -64,19 +130,31 @@ def get_resolve():
     except NameError:
         pass
 
+    _ensure_library_env()
     last_err: Optional[Exception] = None
     for p in _candidate_module_paths():
         if p and os.path.isdir(p) and p not in sys.path:
             sys.path.append(p)
+
+    dvr = None
     try:
         import DaVinciResolveScript as dvr  # type: ignore
     except Exception as exc:  # pragma: no cover
         last_err = exc
+        # Resolve 19/20 also ship a bare `fusionscript` module that exposes the
+        # same scriptapp() entry point; try it before giving up.
+        try:
+            import fusionscript as dvr  # type: ignore
+            last_err = None
+        except Exception as exc2:
+            last_err = exc2
+
+    if dvr is None:
         raise RuntimeError(
             "Could not import DaVinciResolveScript.\n"
-            "Make sure DaVinci Resolve Studio is installed and that external "
-            "scripting is enabled (Preferences > System > General > "
-            "'External scripting using' = Local).\n"
+            "Make sure DaVinci Resolve (18, 19 or 20) is installed and that "
+            "external scripting is enabled: Preferences > System > General > "
+            "'External scripting using' = Local.\n"
             f"Underlying error: {last_err}"
         )
 
@@ -87,6 +165,20 @@ def get_resolve():
             "Open Resolve, load a project, then try again."
         )
     return app
+
+
+def resolve_version(app) -> tuple[int, ...]:
+    """Best-effort (major, minor, patch) of the running Resolve build."""
+    try:
+        parts = app.GetVersion()  # [major, minor, patch, build, suffix]
+        return tuple(int(p) for p in parts[:3])
+    except Exception:
+        pass
+    try:
+        return tuple(int(p) for p in str(app.GetVersionString()).split(".")[:3])
+    except Exception:
+        return (0,)
+
 
 
 @dataclass
@@ -124,10 +216,14 @@ def export_timeline_audio(
     ctx: ResolveContext,
     progress: Optional[ProgressFn] = None,
     poll_seconds: float = 1.0,
+    cancelled: Optional[object] = None,
 ) -> str:
     """
     Clear the render queue, configure an 'audio only' WAV render of the whole
     current timeline and render it into the OS temp directory.
+
+    Cancellation-safe: if the token is tripped while Resolve is rendering, the
+    job is stopped, removed from the queue and any partial file is deleted.
 
     Returns the absolute path of the rendered .wav file.
     """
@@ -136,8 +232,11 @@ def export_timeline_audio(
         if progress:
             progress(msg, pct)
 
+    token = as_token(cancelled)
     project = ctx.project
+    token.check("audio export")
     say("Preparing render queue…", 2)
+
 
     # Resolve must be on the Deliver page for render settings to apply cleanly.
     try:
@@ -193,6 +292,7 @@ def export_timeline_audio(
     except Exception:
         pass
 
+    token.check("audio export")
     job_id = project.AddRenderJob()
     if not job_id:
         raise RuntimeError(
@@ -200,18 +300,55 @@ def export_timeline_audio(
             "has audio and that the Deliver page settings are valid."
         )
 
-    say("Rendering timeline audio…", 10)
-    project.StartRendering([job_id], isInteractiveMode=False)
-
-    while project.IsRenderingInProgress():
-        status = {}
+    def _abort_render() -> None:
         try:
-            status = project.GetRenderJobStatus(job_id) or {}
+            project.StopRendering()
         except Exception:
             pass
-        pct = int(status.get("CompletionPercentage", 0) or 0)
-        say(f"Rendering timeline audio… {pct}%", 10 + int(pct * 0.20))
-        time.sleep(poll_seconds)
+
+    token.add_hook(_abort_render)
+
+    say("Rendering timeline audio…", 10)
+    try:
+        project.StartRendering([job_id], isInteractiveMode=False)
+
+        while project.IsRenderingInProgress():
+            if token.cancelled:
+                _abort_render()
+                break
+            status = {}
+            try:
+                status = project.GetRenderJobStatus(job_id) or {}
+            except Exception:
+                pass
+            pct = int(status.get("CompletionPercentage", 0) or 0)
+            say(f"Rendering timeline audio… {pct}%", 10 + int(pct * 0.20))
+            # Interruptible wait so Cancel reacts within ~100 ms.
+            if token.wait(min(poll_seconds, 0.25)):
+                continue
+    finally:
+        token.remove_hook(_abort_render)
+
+    if token.cancelled:
+        # Wait briefly for Resolve to release the file, then bin the partial WAV.
+        for _ in range(20):
+            try:
+                if not project.IsRenderingInProgress():
+                    break
+            except Exception:
+                break
+            time.sleep(0.1)
+        try:
+            project.DeleteAllRenderJobs()
+        except Exception:
+            pass
+        partial = _find_rendered_file(out_dir, base_name)
+        if partial:
+            try:
+                os.remove(partial)
+            except OSError:
+                pass
+        raise Cancelled("Cancelled during audio export — render stopped cleanly.")
 
     status = project.GetRenderJobStatus(job_id) or {}
     if status.get("JobStatus") not in (None, "Complete"):
@@ -229,6 +366,7 @@ def export_timeline_audio(
         )
     say("Audio export complete.", 30)
     return wav_path
+
 
 
 def _find_rendered_file(out_dir: str, base_name: str) -> Optional[str]:

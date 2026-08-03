@@ -3,6 +3,13 @@ pipeline.py
 -----------
 Orchestrates Step A (export) -> B (transcribe) -> C (import) -> D (cleanup).
 Kept UI-free so it can run headless:  python -m pipeline
+
+Cancellation contract
+---------------------
+The caller passes a ``CancelToken`` (or any ``() -> bool`` predicate). Every
+stage checks it at safe boundaries, the Resolve render is actively stopped,
+and the SRT is written atomically (temp file + ``os.replace``) so a cancel can
+never leave a truncated .srt on disk or a half-placed clip on the timeline.
 """
 
 from __future__ import annotations
@@ -17,6 +24,7 @@ from typing import Callable, Optional
 import ai_engine
 import bn_srt
 import resolve_api
+from cancellation import CancelToken, Cancelled, as_token
 
 
 ProgressFn = Callable[[str, int], None]
@@ -29,6 +37,7 @@ class PipelineResult:
     kept_srt: bool
     placed_on_timeline: bool = False
     message: str = ""
+    cancelled: bool = False
 
 
 def run_pipeline(
@@ -40,42 +49,51 @@ def run_pipeline(
     max_lines: int = bn_srt.DEFAULT_MAX_LINES,
     place_on_timeline: bool = True,
     progress: Optional[ProgressFn] = None,
-    cancelled: Optional[Callable[[], bool]] = None,
+    cancelled: Optional[object] = None,
     transcriber: Optional[ai_engine.Transcriber] = None,
 ) -> PipelineResult:
     def say(msg: str, pct: int) -> None:
         if progress:
             progress(msg, pct)
 
-    def check() -> None:
-        if cancelled and cancelled():
-            raise RuntimeError("Cancelled by user.")
+    token: CancelToken = as_token(cancelled)
 
     say("Connecting to DaVinci Resolve…", 1)
+    token.check("startup")
     ctx = resolve_api.connect()
-    say(f"Connected — {ctx.project_name} / {ctx.timeline_name}", 3)
+    version = ".".join(str(p) for p in resolve_api.resolve_version(ctx.resolve))
+    say(f"Connected — {ctx.project_name} / {ctx.timeline_name} (Resolve {version})", 3)
 
     wav_path = ""
     tmp_srt = ""
+    final_srt = ""
+    wrote_final = False
     try:
-        check()
-        wav_path = resolve_api.export_timeline_audio(ctx, progress=progress)
+        token.check("audio export")
+        wav_path = resolve_api.export_timeline_audio(
+            ctx, progress=progress, cancelled=token
+        )
 
-        check()
+        token.check("transcription")
         engine = transcriber or ai_engine.Transcriber(model_size, prefer_gpu)
-        segments = engine.transcribe(wav_path, progress=progress, cancelled=cancelled)
+        segments = engine.transcribe(wav_path, progress=progress, cancelled=token)
         if not segments:
             raise RuntimeError("No speech was detected in the timeline audio.")
 
-        check()
+        token.check("formatting")
         say("Formatting Bengali subtitles…", 88)
         cues = bn_srt.build_cues(segments, max_chars=max_chars, max_lines=max_lines)
+        srt_text = bn_srt.cues_to_srt(cues)
+
         stamp = time.strftime("%Y%m%d_%H%M%S")
         base = f"{_safe(ctx.timeline_name)}_bn_{stamp}.srt"
         tmp_srt = os.path.join(tempfile.gettempdir(), "resolve_bangla_subs", base)
         os.makedirs(os.path.dirname(tmp_srt), exist_ok=True)
-        with open(tmp_srt, "w", encoding="utf-8-sig", newline="\n") as fh:
-            fh.write(bn_srt.cues_to_srt(cues))
+        _atomic_write(tmp_srt, srt_text)
+
+        # Past this point the subtitle data is complete on disk. Cancelling now
+        # would only discard finished work, so the last checkpoint is here.
+        token.check("formatting")
 
         final_srt = tmp_srt
         kept = False
@@ -89,6 +107,7 @@ def run_pipeline(
             final_srt = os.path.join(target_dir, base)
             shutil.copy2(tmp_srt, final_srt)
             kept = True
+        wrote_final = True
 
         if place_on_timeline:
             placed, message = resolve_api.place_srt_on_timeline(
@@ -105,12 +124,28 @@ def run_pipeline(
         say(message if placed else f"Finished — {message}", 100)
         return PipelineResult(final_srt, len(cues), kept, placed, message)
 
+    except Cancelled as stop:
+        # Nothing partial survives a cancel: drop any half-produced SRT.
+        if not wrote_final:
+            _quiet_remove(final_srt)
+        say(str(stop), 0)
+        return PipelineResult("", 0, False, False, str(stop), cancelled=True)
 
     finally:
         # Step D - cleanup temporaries.
         _quiet_remove(wav_path)
         if tmp_srt and (keep_srt_copy or not os.path.exists(tmp_srt)):
             _quiet_remove(tmp_srt)
+
+
+def _atomic_write(path: str, text: str) -> None:
+    """Write to a sibling .part file and rename, so readers never see a stub."""
+    part = f"{path}.part"
+    with open(part, "w", encoding="utf-8-sig", newline="\n") as fh:
+        fh.write(text)
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(part, path)
 
 
 def _safe(name: str) -> str:
@@ -131,6 +166,8 @@ if __name__ == "__main__":
         print(f"[{pct:3d}%] {msg}")
 
     result = run_pipeline(progress=_cli)
-    print(f"\nSRT: {result.srt_path}  ({result.segment_count} cues)")
-    print(result.message)
-
+    if result.cancelled:
+        print("\nCancelled — nothing was written.")
+    else:
+        print(f"\nSRT: {result.srt_path}  ({result.segment_count} cues)")
+        print(result.message)

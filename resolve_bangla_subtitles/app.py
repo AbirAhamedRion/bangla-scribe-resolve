@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
 import ai_engine
 import bn_srt
 import pipeline
+from cancellation import CancelToken, Cancelled
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STEPS = ["Export audio", "Transcribe", "Format SRT", "Place on timeline"]
@@ -51,14 +52,16 @@ class Worker(QObject):
     progress = Signal(str, int)
     finished = Signal(object)
     failed = Signal(str)
+    cancelled = Signal(str)
 
-    def __init__(self, options: dict) -> None:
+    def __init__(self, options: dict, token: CancelToken) -> None:
         super().__init__()
         self.options = options
-        self._cancel = False
+        self.token = token
 
     def cancel(self) -> None:
-        self._cancel = True
+        """Thread-safe: sets the flag and fires the Resolve render abort hook."""
+        self.token.cancel()
 
     def run(self) -> None:
         try:
@@ -71,12 +74,17 @@ class Worker(QObject):
                 max_lines=self.options["max_lines"],
                 place_on_timeline=self.options["place"],
                 progress=lambda m, p: self.progress.emit(m, p),
-                cancelled=lambda: self._cancel,
+                cancelled=self.token,
             )
-
-            self.finished.emit(result)
+            if getattr(result, "cancelled", False):
+                self.cancelled.emit(result.message or "Cancelled.")
+            else:
+                self.finished.emit(result)
+        except Cancelled as stop:
+            self.cancelled.emit(str(stop))
         except Exception as exc:  # surfaced in the UI, never silently swallowed
             self.failed.emit(f"{exc}\n\n{traceback.format_exc(limit=3)}")
+
 
 
 # --------------------------------------------------------------------------
@@ -146,6 +154,8 @@ class MainWindow(QWidget):
         self._drag: QPoint | None = None
         self.thread: QThread | None = None
         self.worker: Worker | None = None
+        self.token: CancelToken | None = None
+
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(16, 16, 16, 16)
@@ -376,6 +386,7 @@ class MainWindow(QWidget):
         self.steps.set_active(0)
         self.run_btn.setEnabled(False)
         self.cancel_btn.setEnabled(True)
+        self.cancel_btn.setText("Cancel")
         self._set_status("Starting…")
 
         options = {
@@ -387,26 +398,48 @@ class MainWindow(QWidget):
             "place": self.place_check.isChecked(),
         }
 
+        self.token = CancelToken()
         self.thread = QThread(self)
-        self.worker = Worker(options)
+        self.worker = Worker(options, self.token)
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
         self.worker.progress.connect(self._on_progress)
         self.worker.finished.connect(self._on_finished)
         self.worker.failed.connect(self._on_failed)
+        self.worker.cancelled.connect(self._on_cancelled)
         self.thread.start()
 
     def _cancel(self) -> None:
-        if self.worker:
-            self.worker.cancel()
-            self._set_status("Cancelling after the current step…")
-            self.cancel_btn.setEnabled(False)
+        """Never blocks the GUI thread: just trips the token and waits for the
+        worker to unwind at its next safe checkpoint."""
+        if not self.worker:
+            return
+        self.worker.cancel()
+        self.cancel_btn.setEnabled(False)
+        self.cancel_btn.setText("Cancelling…")
+        self._set_status(
+            "Cancelling safely — stopping the Resolve render and finishing the "
+            "current step. Nothing partial will be written."
+        )
+        self._append("Cancel requested by user.")
 
     def _on_progress(self, msg: str, pct: int) -> None:
+        if self.token is not None and self.token.cancelled:
+            # Suppress stale progress so the UI keeps showing "Cancelling…".
+            self._append(f"[{pct:3d}%] {msg}")
+            return
         self.bar.setValue(max(0, min(100, pct)))
         self._set_status(msg)
         self._append(f"[{pct:3d}%] {msg}")
         self.steps.set_active(0 if pct < 30 else 1 if pct < 86 else 2 if pct < 90 else 3)
+
+    def _on_cancelled(self, message: str) -> None:
+        self.bar.setValue(0)
+        self.steps.reset()
+        self._set_status(message or "Cancelled — no files were written.")
+        self._append(message or "Cancelled.")
+        self._teardown()
+
 
     def _on_finished(self, result: pipeline.PipelineResult) -> None:
         self.bar.setValue(100)
@@ -434,11 +467,23 @@ class MainWindow(QWidget):
     def _teardown(self) -> None:
         if self.thread:
             self.thread.quit()
-            self.thread.wait(5000)
+            self.thread.wait(15000)
         self.thread = None
         self.worker = None
+        self.token = None
         self.run_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)
+        self.cancel_btn.setText("Cancel")
+
+    def closeEvent(self, event) -> None:
+        """Closing mid-run cancels first so Resolve is never left rendering."""
+        if self.worker:
+            self.worker.cancel()
+            if self.thread:
+                self.thread.quit()
+                self.thread.wait(15000)
+        event.accept()
+
 
     # -- frameless dragging ----------------------------------------------
     def mousePressEvent(self, event) -> None:
