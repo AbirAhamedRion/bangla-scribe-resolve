@@ -119,8 +119,13 @@ subprocess.Popen([PYTHON, os.path.join(PLUGIN, "app.py")], cwd=PLUGIN)
 
 - **Language is locked to `bn`** and `condition_on_previous_text` is disabled,
   which prevents the repetition loops Whisper falls into on Bengali speech.
+- **Timeline placement:** the app appends to a subtitle track via the Media
+  Pool, falling back to `Timeline.ImportIntoTimeline()`. If an older Resolve
+  build refuses both, it says so and the clip is still waiting in the Media
+  Pool to drag manually.
 - **Cleanup:** the temporary WAV and the temp copy of the SRT are always
   deleted. The imported SRT itself is kept in your chosen folder — Resolve
   links to it on disk, so deleting it would make the Media Pool clip offline.
+
 - The render queue is cleared before and after each run; existing jobs are
   removed, so queue anything you need after generating subtitles.
