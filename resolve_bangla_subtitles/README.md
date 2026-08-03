@@ -2,16 +2,18 @@
 
 Local, offline Bengali subtitle generation for the active Resolve timeline.
 Audio is exported by Resolve, transcribed on your machine with
-`faster-whisper` (CTranslate2), written as `.srt`, and imported straight back
-into the Media Pool.
+`faster-whisper` (CTranslate2), formatted into clean Bengali cues, then
+imported **and placed automatically onto a subtitle track** of your timeline.
 
 ```
 app.py          PySide6 GUI (frameless dark glass UI, QSS in style.qss)
-pipeline.py     Orchestrates export -> transcribe -> SRT -> import -> cleanup
-resolve_api.py  All DaVinci Resolve scripting (render queue, media pool)
-ai_engine.py    faster-whisper wrapper + SRT writer
+pipeline.py     Orchestrates export -> transcribe -> format -> place -> cleanup
+resolve_api.py  All DaVinci Resolve scripting (render queue, subtitle track)
+ai_engine.py    faster-whisper wrapper
+bn_srt.py       Bengali punctuation, cue splitting, line wrapping, SRT output
 style.qss       Premium dark theme
 ```
+
 
 ## 1. Requirements
 
