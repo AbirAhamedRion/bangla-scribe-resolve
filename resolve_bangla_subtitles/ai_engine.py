@@ -132,48 +132,25 @@ class Transcriber:
 
 
 # --------------------------------------------------------------------------
-# SRT writing
+# SRT writing (Bengali-aware formatting lives in bn_srt.py)
 # --------------------------------------------------------------------------
-def _srt_timestamp(seconds: float) -> str:
-    if seconds < 0 or math.isnan(seconds):
-        seconds = 0.0
-    ms_total = int(round(seconds * 1000))
-    h, rem = divmod(ms_total, 3_600_000)
-    m, rem = divmod(rem, 60_000)
-    s, ms = divmod(rem, 1000)
-    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+def segments_to_srt(
+    segments: Iterable[Segment],
+    max_chars: int = bn_srt.DEFAULT_MAX_CHARS,
+    max_lines: int = bn_srt.DEFAULT_MAX_LINES,
+) -> str:
+    """Normalise, re-split and wrap segments, then render them as SRT text."""
+    cues = bn_srt.build_cues(segments, max_chars=max_chars, max_lines=max_lines)
+    return bn_srt.cues_to_srt(cues)
 
 
-def segments_to_srt(segments: Iterable[Segment], max_chars: int = 42) -> str:
-    """Render segments as SRT text, wrapping long Bengali lines in two rows."""
-    blocks: List[str] = []
-    for i, seg in enumerate(segments, start=1):
-        end = max(seg.end, seg.start + 0.2)
-        blocks.append(
-            f"{i}\n"
-            f"{_srt_timestamp(seg.start)} --> {_srt_timestamp(end)}\n"
-            f"{_wrap(seg.text, max_chars)}\n"
-        )
-    return "\n".join(blocks)
-
-
-def _wrap(text: str, max_chars: int) -> str:
-    if len(text) <= max_chars:
-        return text
-    words = text.split()
-    lines, cur = [], ""
-    for w in words:
-        if cur and len(cur) + 1 + len(w) > max_chars:
-            lines.append(cur)
-            cur = w
-        else:
-            cur = f"{cur} {w}".strip()
-    if cur:
-        lines.append(cur)
-    return "\n".join(lines[:2]) if len(lines) > 2 else "\n".join(lines)
-
-
-def write_srt(segments: Iterable[Segment], srt_path: str) -> str:
+def write_srt(
+    segments: Iterable[Segment],
+    srt_path: str,
+    max_chars: int = bn_srt.DEFAULT_MAX_CHARS,
+    max_lines: int = bn_srt.DEFAULT_MAX_LINES,
+) -> str:
     with open(srt_path, "w", encoding="utf-8-sig", newline="\n") as fh:
-        fh.write(segments_to_srt(segments))
+        fh.write(segments_to_srt(segments, max_chars=max_chars, max_lines=max_lines))
     return srt_path
+
