@@ -22,7 +22,7 @@ export const Route = createFileRoute("/")({
       {
         property: "og:description",
         content:
-          "Export, transcribe and place Bengali subtitles inside DaVinci Resolve 18–20. 100% on-device, cancel-safe, no cloud APIs.",
+          "A local PySide6 plugin that exports timeline audio, transcribes Bengali with faster-whisper large-v3 and places clean SRT subtitles on your DaVinci Resolve timeline.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

@@ -77,21 +77,25 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Bangla Subtitle Studio for DaVinci Resolve" },
+      { title: "Bangla Subtitle Studio — Offline Bengali Subtitles for Resolve" },
       {
         name: "description",
         content:
-          "Offline Bengali subtitle generation for DaVinci Resolve: export, transcribe with faster-whisper and place SRTs on your timeline.",
+          "A local PySide6 plugin that exports timeline audio, transcribes Bengali with faster-whisper large-v3 and places clean SRT subtitles on your DaVinci Resolve timeline.",
       },
       { name: "author", content: "Bangla Subtitle Studio" },
-      { property: "og:title", content: "Bangla Subtitle Studio for DaVinci Resolve" },
+      { property: "og:title", content: "Bangla Subtitle Studio — Offline Bengali Subtitles for Resolve" },
       {
         property: "og:description",
         content:
-          "Offline Bengali subtitle generation for DaVinci Resolve, powered by faster-whisper.",
+          "A local PySide6 plugin that exports timeline audio, transcribes Bengali with faster-whisper large-v3 and places clean SRT subtitles on your DaVinci Resolve timeline.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Bangla Subtitle Studio — Offline Bengali Subtitles for Resolve" },
+      { name: "twitter:description", content: "A local PySide6 plugin that exports timeline audio, transcribes Bengali with faster-whisper large-v3 and places clean SRT subtitles on your DaVinci Resolve timeline." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/72065d85-7ce7-41cf-887a-6915c403de8c/id-preview-3ec9a295--e81715f1-6400-489b-9a91-d0266f694d25.lovable.app-1785741706672.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/72065d85-7ce7-41cf-887a-6915c403de8c/id-preview-3ec9a295--e81715f1-6400-489b-9a91-d0266f694d25.lovable.app-1785741706672.png" },
     ],
     links: [
       {
