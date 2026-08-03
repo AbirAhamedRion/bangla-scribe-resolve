@@ -411,11 +411,20 @@ class MainWindow(QWidget):
     def _on_finished(self, result: pipeline.PipelineResult) -> None:
         self.bar.setValue(100)
         self.steps.set_active(len(STEPS))
-        self._set_status(
-            f"Done — {result.segment_count} subtitle segments imported.", "ok"
+        tail = (
+            "placed on the timeline"
+            if result.placed_on_timeline
+            else "imported into the Media Pool"
         )
+        self._set_status(
+            f"Done — {result.segment_count} Bengali cues {tail}.",
+            "ok" if result.placed_on_timeline else "",
+        )
+        if result.message:
+            self._append(result.message)
         self._append(f"SRT saved to: {result.srt_path}")
         self._teardown()
+
 
     def _on_failed(self, message: str) -> None:
         self._set_status(message.splitlines()[0], "error")
