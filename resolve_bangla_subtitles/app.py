@@ -157,7 +157,12 @@ class MainWindow(QWidget):
         self.setWindowTitle("Bangla Subtitle Studio")
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.resize(620, 640)
+        # Restore the previous session's options before any widget is built,
+        # so every control can be constructed with its saved value.
+        self.settings = settings_store.load()
+        self.resize(
+            int(self.settings["window"]["w"]), int(self.settings["window"]["h"])
+        )
         self._drag: QPoint | None = None
         self.thread: QThread | None = None
         self.worker: Worker | None = None
