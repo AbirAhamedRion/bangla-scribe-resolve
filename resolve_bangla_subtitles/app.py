@@ -480,6 +480,46 @@ class MainWindow(QWidget):
         self._append(f"Cleared cached weights for {name}.")
         self._refresh_cache()
 
+    def _refresh_transcripts(self) -> None:
+        """Show how many past transcriptions can be replayed instantly."""
+        count = transcript_cache.entry_count()
+        if count:
+            self.transcript_label.setText(
+                f"{count} cached transcript{'s' if count != 1 else ''} — an "
+                "unchanged timeline re-renders subtitles in seconds."
+            )
+        else:
+            self.transcript_label.setText(
+                "No cached transcripts yet — the first run of each timeline is "
+                "stored so repeats skip Whisper."
+            )
+
+    def _clear_transcripts(self) -> None:
+        removed = transcript_cache.clear()
+        self._append(f"Cleared {removed} cached transcript(s).")
+        self._refresh_transcripts()
+
+    # -- settings persistence ---------------------------------------------
+    def _current_options(self) -> dict:
+        return {
+            "model": self.model_box.currentText(),
+            "gpu": self.gpu_check.isChecked(),
+            "output_dir": self.out_value.text(),
+            "max_chars": self.chars_slider.value(),
+            "max_lines": self.lines_spin.value(),
+            "place": self.place_check.isChecked(),
+            "trim": self.trim_check.isChecked(),
+            "threshold_db": int(self.threshold_slider.value()),
+            "reuse_transcript": self.reuse_check.isChecked(),
+            "window": {"w": self.width(), "h": self.height()},
+        }
+
+    def _save_settings(self) -> None:
+        self.settings = self._current_options()
+        settings_store.save(self.settings)
+
+
+
 
     def _append(self, msg: str) -> None:
         self.log.appendPlainText(msg)
