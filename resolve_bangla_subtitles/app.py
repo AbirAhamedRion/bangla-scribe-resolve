@@ -308,7 +308,7 @@ class MainWindow(QWidget):
         self.trim_check = QCheckBox(
             "Trim leading and trailing silence before transcribing"
         )
-        self.trim_check.setChecked(True)
+        self.trim_check.setChecked(bool(self.settings.get("trim", True)))
         col.addWidget(self.trim_check)
 
         trim_row = QHBoxLayout()
