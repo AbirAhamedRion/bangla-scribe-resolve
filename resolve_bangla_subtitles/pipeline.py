@@ -81,41 +81,88 @@ def run_pipeline(
     wrote_final = False
     trim_summary = ""
     repair_summary = ""
+    cache_summary = ""
+    reused = False
     try:
         token.check("audio export")
         wav_path = resolve_api.export_timeline_audio(
             ctx, progress=progress, cancelled=token
         )
 
-        # Optional pre-pass: strip leading/trailing silence so the first and
-        # last cues sit on the actual voice. The removed head is added back to
-        # every timestamp, so timeline sync is preserved.
-        offset = 0.0
-        audio_for_whisper = wav_path
-        if trim_silence:
-            token.check("silence trim")
-            say("Analysing audio for leading/trailing silence…", 33)
-            trim = audio_trim.trim_silence(
-                wav_path, threshold_db=silence_threshold_db, progress=progress
-            )
-            if trim.created_file:
-                trimmed_path = trim.path
-            audio_for_whisper = trim.path
-            offset = trim.offset
-            trim_summary = (
-                f"Trimmed {trim.trimmed_head:.1f}s of head and "
-                f"{trim.trimmed_tail:.1f}s of tail silence."
-                if trim.changed
-                else "No leading/trailing silence to trim."
-            )
+        # Transcription cache: fingerprint the freshly exported WAV plus the
+        # settings that influence decoding. An unchanged timeline therefore
+        # skips both the silence pass and Whisper entirely.
+        cache_key = ""
+        segments = None
+        if reuse_transcript:
+            try:
+                token.check("cache lookup")
+                say("Checking for a cached transcript…", 31)
+                cache_key = transcript_cache.make_key(
+                    wav_path,
+                    model_size=model_size,
+                    language=ai_engine.LANGUAGE,
+                    trim_silence=trim_silence,
+                    silence_threshold_db=silence_threshold_db,
+                )
+                hit = transcript_cache.load(cache_key, ai_engine.Segment)
+            except Cancelled:
+                raise
+            except Exception:
+                hit = None
+            if hit:
+                segments = hit.segments
+                reused = True
+                cache_summary = (
+                    f"Reused cached transcript ({len(segments)} segments, "
+                    f"from {hit.age_text}) — transcription skipped."
+                )
+                say(cache_summary, 85)
 
-        token.check("transcription")
-        engine = transcriber or ai_engine.get_transcriber(model_size, prefer_gpu)
-        segments = engine.transcribe(
-            audio_for_whisper, progress=progress, cancelled=token, time_offset=offset
-        )
-        if not segments:
+        offset = 0.0
+        if segments is None:
+            # Optional pre-pass: strip leading/trailing silence so the first and
+            # last cues sit on the actual voice. The removed head is added back
+            # to every timestamp, so timeline sync is preserved.
+            audio_for_whisper = wav_path
+            if trim_silence:
+                token.check("silence trim")
+                say("Analysing audio for leading/trailing silence…", 33)
+                trim = audio_trim.trim_silence(
+                    wav_path, threshold_db=silence_threshold_db, progress=progress
+                )
+                if trim.created_file:
+                    trimmed_path = trim.path
+                audio_for_whisper = trim.path
+                offset = trim.offset
+                trim_summary = (
+                    f"Trimmed {trim.trimmed_head:.1f}s of head and "
+                    f"{trim.trimmed_tail:.1f}s of tail silence."
+                    if trim.changed
+                    else "No leading/trailing silence to trim."
+                )
+
+            token.check("transcription")
+            engine = transcriber or ai_engine.get_transcriber(model_size, prefer_gpu)
+            segments = engine.transcribe(
+                audio_for_whisper, progress=progress, cancelled=token, time_offset=offset
+            )
+            if not segments:
+                raise RuntimeError("No speech was detected in the timeline audio.")
+
+            # Only a complete, uncancelled decode is worth caching.
+            if reuse_transcript and cache_key:
+                stored = transcript_cache.save(
+                    cache_key, segments, label=ctx.timeline_name
+                )
+                cache_summary = (
+                    "Transcript cached — re-running this timeline will skip Whisper."
+                    if stored
+                    else "Transcript could not be cached (cache folder not writable)."
+                )
+        elif not segments:
             raise RuntimeError("No speech was detected in the timeline audio.")
+
 
         token.check("formatting")
         say("Formatting Bengali subtitles…", 88)
