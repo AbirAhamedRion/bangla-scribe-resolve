@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
 import ai_engine
 import bn_srt
 import pipeline
+from cancellation import CancelToken, Cancelled
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STEPS = ["Export audio", "Transcribe", "Format SRT", "Place on timeline"]
@@ -51,14 +52,16 @@ class Worker(QObject):
     progress = Signal(str, int)
     finished = Signal(object)
     failed = Signal(str)
+    cancelled = Signal(str)
 
-    def __init__(self, options: dict) -> None:
+    def __init__(self, options: dict, token: CancelToken) -> None:
         super().__init__()
         self.options = options
-        self._cancel = False
+        self.token = token
 
     def cancel(self) -> None:
-        self._cancel = True
+        """Thread-safe: sets the flag and fires the Resolve render abort hook."""
+        self.token.cancel()
 
     def run(self) -> None:
         try:
@@ -71,12 +74,17 @@ class Worker(QObject):
                 max_lines=self.options["max_lines"],
                 place_on_timeline=self.options["place"],
                 progress=lambda m, p: self.progress.emit(m, p),
-                cancelled=lambda: self._cancel,
+                cancelled=self.token,
             )
-
-            self.finished.emit(result)
+            if getattr(result, "cancelled", False):
+                self.cancelled.emit(result.message or "Cancelled.")
+            else:
+                self.finished.emit(result)
+        except Cancelled as stop:
+            self.cancelled.emit(str(stop))
         except Exception as exc:  # surfaced in the UI, never silently swallowed
             self.failed.emit(f"{exc}\n\n{traceback.format_exc(limit=3)}")
+
 
 
 # --------------------------------------------------------------------------
