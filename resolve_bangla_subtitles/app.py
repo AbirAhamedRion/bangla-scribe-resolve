@@ -467,11 +467,23 @@ class MainWindow(QWidget):
     def _teardown(self) -> None:
         if self.thread:
             self.thread.quit()
-            self.thread.wait(5000)
+            self.thread.wait(15000)
         self.thread = None
         self.worker = None
+        self.token = None
         self.run_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)
+        self.cancel_btn.setText("Cancel")
+
+    def closeEvent(self, event) -> None:
+        """Closing mid-run cancels first so Resolve is never left rendering."""
+        if self.worker:
+            self.worker.cancel()
+            if self.thread:
+                self.thread.quit()
+                self.thread.wait(15000)
+        event.accept()
+
 
     # -- frameless dragging ----------------------------------------------
     def mousePressEvent(self, event) -> None:
