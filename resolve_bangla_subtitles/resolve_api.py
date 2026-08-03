@@ -130,19 +130,31 @@ def get_resolve():
     except NameError:
         pass
 
+    _ensure_library_env()
     last_err: Optional[Exception] = None
     for p in _candidate_module_paths():
         if p and os.path.isdir(p) and p not in sys.path:
             sys.path.append(p)
+
+    dvr = None
     try:
         import DaVinciResolveScript as dvr  # type: ignore
     except Exception as exc:  # pragma: no cover
         last_err = exc
+        # Resolve 19/20 also ship a bare `fusionscript` module that exposes the
+        # same scriptapp() entry point; try it before giving up.
+        try:
+            import fusionscript as dvr  # type: ignore
+            last_err = None
+        except Exception as exc2:
+            last_err = exc2
+
+    if dvr is None:
         raise RuntimeError(
             "Could not import DaVinciResolveScript.\n"
-            "Make sure DaVinci Resolve Studio is installed and that external "
-            "scripting is enabled (Preferences > System > General > "
-            "'External scripting using' = Local).\n"
+            "Make sure DaVinci Resolve (18, 19 or 20) is installed and that "
+            "external scripting is enabled: Preferences > System > General > "
+            "'External scripting using' = Local.\n"
             f"Underlying error: {last_err}"
         )
 
@@ -153,6 +165,20 @@ def get_resolve():
             "Open Resolve, load a project, then try again."
         )
     return app
+
+
+def resolve_version(app) -> tuple[int, ...]:
+    """Best-effort (major, minor, patch) of the running Resolve build."""
+    try:
+        parts = app.GetVersion()  # [major, minor, patch, build, suffix]
+        return tuple(int(p) for p in parts[:3])
+    except Exception:
+        pass
+    try:
+        return tuple(int(p) for p in str(app.GetVersionString()).split(".")[:3])
+    except Exception:
+        return (0,)
+
 
 
 @dataclass
