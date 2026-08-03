@@ -382,7 +382,11 @@ class MainWindow(QWidget):
             "model": self.model_box.currentText(),
             "gpu": self.gpu_check.isChecked(),
             "output_dir": self.out_value.text(),
+            "max_chars": self.chars_slider.value(),
+            "max_lines": self.lines_spin.value(),
+            "place": self.place_check.isChecked(),
         }
+
         self.thread = QThread(self)
         self.worker = Worker(options)
         self.worker.moveToThread(self.thread)
