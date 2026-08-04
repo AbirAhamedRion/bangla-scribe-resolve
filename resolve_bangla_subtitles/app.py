@@ -626,7 +626,10 @@ class MainWindow(QWidget):
             "trim": self.trim_check.isChecked(),
             "threshold_db": int(self.threshold_slider.value()),
             "reuse_transcript": self.reuse_check.isChecked(),
+            "timeline": self._selected_timeline(),
+            "use_in_out": self.inout_check.isChecked(),
             "window": {"w": self.width(), "h": self.height()},
+
         }
 
     def _save_settings(self) -> None:
