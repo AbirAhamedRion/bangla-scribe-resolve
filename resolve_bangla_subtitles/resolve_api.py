@@ -377,16 +377,21 @@ def export_timeline_audio(
     progress: Optional[ProgressFn] = None,
     poll_seconds: float = 1.0,
     cancelled: Optional[object] = None,
+    frame_range: Optional[tuple[int, int]] = None,
 ) -> str:
     """
-    Clear the render queue, configure an 'audio only' WAV render of the whole
+    Clear the render queue, configure an 'audio only' WAV render of the
     current timeline and render it into the OS temp directory.
+
+    ``frame_range`` renders only that (in, out) span — used when the user asks
+    to transcribe just the marked part of the timeline.
 
     Cancellation-safe: if the token is tripped while Resolve is rendering, the
     job is stopped, removed from the queue and any partial file is deleted.
 
     Returns the absolute path of the rendered .wav file.
     """
+
 
     def say(msg: str, pct: int) -> None:
         if progress:
