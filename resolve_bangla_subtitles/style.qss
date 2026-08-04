@@ -31,7 +31,7 @@ QWidget {
     color: rgba(231, 236, 245, 0.45);
 }
 
-#WinBtn {
+#WinBtn, #WinBtnClose, #WinBtnMin, #WinBtnMax {
     background: rgba(255, 255, 255, 0.06);
     border: none;
     border-radius: 6px;
@@ -42,7 +42,14 @@ QWidget {
 }
 #WinBtnClose { background: #ff5f57; }
 #WinBtnMin   { background: #febc2e; }
-#WinBtn:hover, #WinBtnClose:hover, #WinBtnMin:hover { background: #ffffff; }
+#WinBtnMax   { background: #28c840; }
+#WinBtn:hover, #WinBtnClose:hover, #WinBtnMin:hover, #WinBtnMax:hover {
+    background: #ffffff;
+}
+
+/* ---------- scroll container ---------- */
+#Scroller, #Scroller > QWidget > QWidget { background: transparent; }
+
 
 /* ---------- glass card ---------- */
 #Card {
