@@ -81,18 +81,25 @@ def _sanitise(raw: Dict[str, Any]) -> Dict[str, Any]:
     for flag in ("gpu", "trim", "place", "reuse_transcript"):
         out[flag] = bool(raw.get(flag, DEFAULTS[flag]))
 
+    for flag in ("gpu", "trim", "place", "reuse_transcript", "use_in_out"):
+        out[flag] = bool(raw.get(flag, DEFAULTS[flag]))
+
     out["threshold_db"] = _clamp(raw.get("threshold_db"), -70, -25, DEFAULTS["threshold_db"])
     out["max_chars"] = _clamp(raw.get("max_chars"), 20, 70, DEFAULTS["max_chars"])
     out["max_lines"] = _clamp(raw.get("max_lines"), 1, 3, DEFAULTS["max_lines"])
+
+    timeline = raw.get("timeline") or ""
+    out["timeline"] = timeline if isinstance(timeline, str) else ""
 
     out_dir = raw.get("output_dir") or ""
     out["output_dir"] = out_dir if isinstance(out_dir, str) else ""
 
     win = raw.get("window") if isinstance(raw.get("window"), dict) else {}
     out["window"] = {
-        "w": _clamp(win.get("w"), 520, 2400, DEFAULTS["window"]["w"]),
-        "h": _clamp(win.get("h"), 480, 2000, DEFAULTS["window"]["h"]),
+        "w": _clamp(win.get("w"), 740, 2400, DEFAULTS["window"]["w"]),
+        "h": _clamp(win.get("h"), 560, 2000, DEFAULTS["window"]["h"]),
     }
+
     return out
 
 
