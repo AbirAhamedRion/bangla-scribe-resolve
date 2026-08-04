@@ -144,7 +144,8 @@ def run_pipeline(
                 )
                 say(cache_summary, 85)
 
-        offset = 0.0
+        offset = range_offset
+
         if segments is None:
             # Optional pre-pass: strip leading/trailing silence so the first and
             # last cues sit on the actual voice. The removed head is added back
