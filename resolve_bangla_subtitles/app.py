@@ -83,8 +83,11 @@ class Worker(QObject):
                 trim_silence=self.options["trim"],
                 silence_threshold_db=self.options["threshold_db"],
                 reuse_transcript=self.options.get("reuse_transcript", True),
+                timeline_name=self.options.get("timeline") or None,
+                use_in_out=self.options.get("use_in_out", False),
                 progress=lambda m, p: self.progress.emit(m, p),
                 cancelled=self.token,
+
             )
             if getattr(result, "cancelled", False):
                 self.cancelled.emit(result.message or "Cancelled.")
