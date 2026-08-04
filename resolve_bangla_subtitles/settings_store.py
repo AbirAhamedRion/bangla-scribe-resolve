@@ -78,8 +78,6 @@ def _sanitise(raw: Dict[str, Any]) -> Dict[str, Any]:
     model = raw.get("model")
     out["model"] = model if model in _MODELS else DEFAULTS["model"]
 
-    for flag in ("gpu", "trim", "place", "reuse_transcript"):
-        out[flag] = bool(raw.get(flag, DEFAULTS[flag]))
 
     for flag in ("gpu", "trim", "place", "reuse_transcript", "use_in_out"):
         out[flag] = bool(raw.get(flag, DEFAULTS[flag]))
