@@ -160,7 +160,7 @@ def run_pipeline(
                 if trim.created_file:
                     trimmed_path = trim.path
                 audio_for_whisper = trim.path
-                offset = trim.offset
+                offset = range_offset + trim.offset
                 trim_summary = (
                     f"Trimmed {trim.trimmed_head:.1f}s of head and "
                     f"{trim.trimmed_tail:.1f}s of tail silence."
