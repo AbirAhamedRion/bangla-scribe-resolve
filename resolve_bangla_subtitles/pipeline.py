@@ -58,6 +58,8 @@ def run_pipeline(
     trim_silence: bool = True,
     silence_threshold_db: float = audio_trim.DEFAULT_THRESHOLD_DB,
     reuse_transcript: bool = True,
+    timeline_name: Optional[str] = None,
+    use_in_out: bool = False,
     progress: Optional[ProgressFn] = None,
     cancelled: Optional[object] = None,
     transcriber: Optional[ai_engine.Transcriber] = None,
@@ -70,7 +72,7 @@ def run_pipeline(
 
     say("Connecting to DaVinci Resolve…", 1)
     token.check("startup")
-    ctx = resolve_api.connect()
+    ctx = resolve_api.connect(timeline_name)
     version = ".".join(str(p) for p in resolve_api.resolve_version(ctx.resolve))
     say(f"Connected — {ctx.project_name} / {ctx.timeline_name} (Resolve {version})", 3)
 
@@ -85,9 +87,32 @@ def run_pipeline(
     reused = False
     try:
         token.check("audio export")
+
+        # Optional partial transcription: honour the timeline's in/out marks so
+        # only the selected span is rendered, transcribed and captioned. Cue
+        # times are shifted back onto the full timeline afterwards.
+        frame_range = None
+        range_offset = 0.0
+        if use_in_out:
+            frame_range = resolve_api.timeline_range(ctx)
+            if frame_range is None:
+                raise RuntimeError(
+                    "No In/Out range is marked on this timeline. Set In (I) and "
+                    "Out (O) points in Resolve, or switch back to the whole "
+                    "timeline."
+                )
+            fps = resolve_api.timeline_fps(ctx)
+            range_offset = frame_range[0] / fps if fps else 0.0
+            say(
+                f"Transcribing the marked range only "
+                f"({range_offset:.1f}s → {frame_range[1] / fps:.1f}s).",
+                4,
+            )
+
         wav_path = resolve_api.export_timeline_audio(
-            ctx, progress=progress, cancelled=token
+            ctx, progress=progress, cancelled=token, frame_range=frame_range
         )
+
 
         # Transcription cache: fingerprint the freshly exported WAV plus the
         # settings that influence decoding. An unchanged timeline therefore
