@@ -251,16 +251,122 @@ class ResolveContext:
         return self.project.GetName()
 
 
-def connect() -> ResolveContext:
+def connect(timeline_name: Optional[str] = None) -> ResolveContext:
+    """
+    Connect to Resolve.
+
+    ``timeline_name`` lets the user work on any timeline in the project, not
+    just the one that happens to be open. The chosen timeline is made current
+    so render settings, in/out marks and subtitle placement all target it.
+    """
     app = get_resolve()
     pm = app.GetProjectManager()
     project = pm.GetCurrentProject()
     if project is None:
         raise RuntimeError("No project is open in DaVinci Resolve.")
+
+    if timeline_name:
+        wanted = _find_timeline(project, timeline_name)
+        if wanted is None:
+            raise RuntimeError(
+                f"Timeline '{timeline_name}' was not found in this project. "
+                "Refresh the timeline list and try again."
+            )
+        try:
+            project.SetCurrentTimeline(wanted)
+        except Exception:
+            pass
+
     timeline = project.GetCurrentTimeline()
     if timeline is None:
         raise RuntimeError("No timeline is open in the current project.")
     return ResolveContext(app, pm, project, timeline)
+
+
+def _find_timeline(project, name: str):
+    try:
+        count = int(project.GetTimelineCount() or 0)
+    except Exception:
+        return None
+    for i in range(1, count + 1):
+        try:
+            tl = project.GetTimelineByIndex(i)
+        except Exception:
+            continue
+        if tl is not None and tl.GetName() == name:
+            return tl
+    return None
+
+
+def list_timelines(project=None) -> list[str]:
+    """Names of every timeline in the current project (empty list on failure)."""
+    try:
+        if project is None:
+            app = get_resolve()
+            project = app.GetProjectManager().GetCurrentProject()
+        if project is None:
+            return []
+        count = int(project.GetTimelineCount() or 0)
+        names: list[str] = []
+        for i in range(1, count + 1):
+            tl = project.GetTimelineByIndex(i)
+            if tl is not None:
+                names.append(tl.GetName())
+        return names
+    except Exception:
+        return []
+
+
+def current_timeline_name(project=None) -> str:
+    try:
+        if project is None:
+            app = get_resolve()
+            project = app.GetProjectManager().GetCurrentProject()
+        tl = project.GetCurrentTimeline() if project else None
+        return tl.GetName() if tl else ""
+    except Exception:
+        return ""
+
+
+def timeline_fps(ctx: "ResolveContext") -> float:
+    for getter in (
+        lambda: ctx.timeline.GetSetting("timelineFrameRate"),
+        lambda: ctx.project.GetSetting("timelineFrameRate"),
+    ):
+        try:
+            value = float(getter())
+            if value > 0:
+                return value
+        except Exception:
+            continue
+    return 24.0
+
+
+def timeline_range(ctx: "ResolveContext") -> Optional[tuple[int, int]]:
+    """
+    (in, out) frames of the current in/out marks, relative to timeline start.
+
+    Returns None when the timeline has no marks set.
+    """
+    marks = None
+    try:
+        marks = ctx.timeline.GetMarkInOut()
+    except Exception:
+        marks = None
+    if not isinstance(marks, dict):
+        return None
+    for key in ("audio", "video"):
+        part = marks.get(key)
+        if isinstance(part, dict) and part.get("in") is not None:
+            try:
+                start = int(part["in"])
+                end = int(part["out"])
+            except (TypeError, ValueError):
+                continue
+            if end > start:
+                return (start, end)
+    return None
+
 
 
 # --------------------------------------------------------------------------
