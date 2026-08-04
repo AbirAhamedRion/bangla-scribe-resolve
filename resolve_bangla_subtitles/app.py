@@ -28,12 +28,15 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
+    QScrollArea,
+    QSizeGrip,
     QSizePolicy,
     QSlider,
     QSpinBox,
     QVBoxLayout,
     QWidget,
 )
+
 
 import ai_engine
 import audio_trim
@@ -80,8 +83,11 @@ class Worker(QObject):
                 trim_silence=self.options["trim"],
                 silence_threshold_db=self.options["threshold_db"],
                 reuse_transcript=self.options.get("reuse_transcript", True),
+                timeline_name=self.options.get("timeline") or None,
+                use_in_out=self.options.get("use_in_out", False),
                 progress=lambda m, p: self.progress.emit(m, p),
                 cancelled=self.token,
+
             )
             if getattr(result, "cancelled", False):
                 self.cancelled.emit(result.message or "Cancelled.")
@@ -160,6 +166,9 @@ class MainWindow(QWidget):
         # Restore the previous session's options before any widget is built,
         # so every control can be constructed with its saved value.
         self.settings = settings_store.load()
+        # ~8 x 6 inches at 96 dpi, with a floor that keeps every label readable
+        # instead of elided or clipped.
+        self.setMinimumSize(740, 560)
         self.resize(
             int(self.settings["window"]["w"]), int(self.settings["window"]["h"])
         )
@@ -170,20 +179,36 @@ class MainWindow(QWidget):
 
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(16, 16, 16, 16)
+        outer.setContentsMargins(14, 14, 14, 14)
 
         shell = QFrame()
         shell.setObjectName("Shell")
         outer.addWidget(shell)
 
         root = QVBoxLayout(shell)
-        root.setContentsMargins(24, 18, 24, 22)
-        root.setSpacing(18)
+        root.setContentsMargins(22, 14, 22, 16)
+        root.setSpacing(14)
 
         root.addWidget(self._title_bar())
         root.addWidget(self._hero())
-        root.addWidget(self._settings_card())
-        root.addWidget(self._progress_card(), 1)
+
+        # Everything below the hero scrolls, so shrinking the window never
+        # squashes or overflows the controls — it just reveals a scrollbar.
+        body = QWidget()
+        body_col = QVBoxLayout(body)
+        body_col.setContentsMargins(0, 0, 6, 0)
+        body_col.setSpacing(14)
+        body_col.addWidget(self._settings_card())
+        body_col.addWidget(self._progress_card(), 1)
+
+        scroll = QScrollArea()
+        scroll.setObjectName("Scroller")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setWidget(body)
+        root.addWidget(scroll, 1)
+
         root.addLayout(self._actions())
 
     # -- sections ---------------------------------------------------------
@@ -196,12 +221,19 @@ class MainWindow(QWidget):
 
         close = QPushButton()
         close.setObjectName("WinBtnClose")
+        close.setToolTip("Close")
         close.clicked.connect(self.close)
         mini = QPushButton()
         mini.setObjectName("WinBtnMin")
+        mini.setToolTip("Minimise")
         mini.clicked.connect(self.showMinimized)
+        self.max_btn = QPushButton()
+        self.max_btn.setObjectName("WinBtnMax")
+        self.max_btn.setToolTip("Maximise")
+        self.max_btn.clicked.connect(self._toggle_maximise)
         row.addWidget(close)
         row.addWidget(mini)
+        row.addWidget(self.max_btn)
         row.addStretch(1)
 
         title = QLabel("Bangla Subtitle Studio")
@@ -212,6 +244,7 @@ class MainWindow(QWidget):
         sub = QLabel("for DaVinci Resolve Studio")
         sub.setObjectName("AppSubtitle")
         row.addWidget(sub)
+
         return bar
 
     def _hero(self) -> QWidget:
@@ -223,9 +256,11 @@ class MainWindow(QWidget):
         h.setObjectName("Hero")
         h.setWordWrap(True)
         p = QLabel(
-            "Exports your active timeline's audio, transcribes it locally with "
-            "faster-whisper, and drops a ready-to-use .srt in the Media Pool."
+            "Pick any timeline — or just its In/Out range — transcribe it "
+            "locally with faster-whisper, and get a styled .srt placed straight "
+            "onto a subtitle track."
         )
+
         p.setObjectName("Muted")
         p.setWordWrap(True)
         col.addWidget(h)
@@ -238,9 +273,45 @@ class MainWindow(QWidget):
         col.setContentsMargins(20, 18, 20, 18)
         col.setSpacing(14)
 
+        src_head = QLabel("Source")
+        src_head.setObjectName("CardTitle")
+        col.addWidget(src_head)
+
+        tl_row = QHBoxLayout()
+        tl_row.setSpacing(12)
+        tl_lbl = QLabel("Timeline")
+        tl_lbl.setObjectName("Muted")
+        self.timeline_box = QComboBox()
+        self.timeline_box.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
+        self.timeline_box.setMinimumContentsLength(18)
+        refresh_btn = QPushButton("Refresh")
+        refresh_btn.setObjectName("Ghost")
+        refresh_btn.clicked.connect(self._refresh_timelines)
+        tl_row.addWidget(tl_lbl)
+        tl_row.addWidget(self.timeline_box, 1)
+        tl_row.addWidget(refresh_btn)
+        col.addLayout(tl_row)
+
+        self.inout_check = QCheckBox(
+            "Transcribe only the In/Out range marked on that timeline"
+        )
+        self.inout_check.setChecked(bool(self.settings.get("use_in_out", False)))
+        col.addWidget(self.inout_check)
+
+        self.timeline_hint = QLabel()
+        self.timeline_hint.setObjectName("Muted")
+        self.timeline_hint.setWordWrap(True)
+        col.addWidget(self.timeline_hint)
+        self._refresh_timelines()
+
+        col.addWidget(divider())
+
         head = QLabel("Engine")
         head.setObjectName("CardTitle")
         col.addWidget(head)
+
 
         row = QHBoxLayout()
         row.setSpacing(12)
@@ -450,13 +521,59 @@ class MainWindow(QWidget):
         row.addStretch(1)
         row.addWidget(self.cancel_btn)
         row.addWidget(self.run_btn)
+        grip = QSizeGrip(self)
+        grip.setFixedSize(16, 16)
+        row.addWidget(grip, 0, Qt.AlignmentFlag.AlignBottom)
         return row
 
     # -- behaviour --------------------------------------------------------
+    def _toggle_maximise(self) -> None:
+        if self.isMaximized():
+            self.showNormal()
+            self.max_btn.setToolTip("Maximise")
+        else:
+            self.showMaximized()
+            self.max_btn.setToolTip("Restore")
+
+    def _refresh_timelines(self) -> None:
+        """List every timeline in the open project so any of them can be run."""
+        import resolve_api  # imported lazily: Resolve may not be running yet
+
+        try:
+            names = resolve_api.list_timelines()
+            current = resolve_api.current_timeline_name()
+        except Exception:
+            names, current = [], ""
+
+        saved = self.settings.get("timeline") or ""
+        self.timeline_box.blockSignals(True)
+        self.timeline_box.clear()
+        if names:
+            self.timeline_box.addItems(names)
+            pick = saved if saved in names else (current or names[0])
+            self.timeline_box.setCurrentText(pick)
+            self.timeline_box.setEnabled(True)
+            self.timeline_hint.setText(
+                f"{len(names)} timeline{'s' if len(names) != 1 else ''} found. "
+                "Pick one, or mark In/Out in Resolve to caption just part of it."
+            )
+        else:
+            self.timeline_box.addItem("Use the timeline open in Resolve")
+            self.timeline_box.setEnabled(False)
+            self.timeline_hint.setText(
+                "Resolve is not reachable yet — open your project and press "
+                "Refresh. The currently open timeline is used meanwhile."
+            )
+        self.timeline_box.blockSignals(False)
+
+    def _selected_timeline(self) -> str:
+        return self.timeline_box.currentText() if self.timeline_box.isEnabled() else ""
+
     def _choose_dir(self) -> None:
         d = QFileDialog.getExistingDirectory(self, "Choose SRT folder", self.out_value.text())
         if d:
             self.out_value.setText(d)
+
 
     def _refresh_cache(self) -> None:
         """Show whether the selected model is already on disk."""
@@ -511,7 +628,10 @@ class MainWindow(QWidget):
             "trim": self.trim_check.isChecked(),
             "threshold_db": int(self.threshold_slider.value()),
             "reuse_transcript": self.reuse_check.isChecked(),
+            "timeline": self._selected_timeline(),
+            "use_in_out": self.inout_check.isChecked(),
             "window": {"w": self.width(), "h": self.height()},
+
         }
 
     def _save_settings(self) -> None:

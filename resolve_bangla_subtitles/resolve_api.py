@@ -251,16 +251,122 @@ class ResolveContext:
         return self.project.GetName()
 
 
-def connect() -> ResolveContext:
+def connect(timeline_name: Optional[str] = None) -> ResolveContext:
+    """
+    Connect to Resolve.
+
+    ``timeline_name`` lets the user work on any timeline in the project, not
+    just the one that happens to be open. The chosen timeline is made current
+    so render settings, in/out marks and subtitle placement all target it.
+    """
     app = get_resolve()
     pm = app.GetProjectManager()
     project = pm.GetCurrentProject()
     if project is None:
         raise RuntimeError("No project is open in DaVinci Resolve.")
+
+    if timeline_name:
+        wanted = _find_timeline(project, timeline_name)
+        if wanted is None:
+            raise RuntimeError(
+                f"Timeline '{timeline_name}' was not found in this project. "
+                "Refresh the timeline list and try again."
+            )
+        try:
+            project.SetCurrentTimeline(wanted)
+        except Exception:
+            pass
+
     timeline = project.GetCurrentTimeline()
     if timeline is None:
         raise RuntimeError("No timeline is open in the current project.")
     return ResolveContext(app, pm, project, timeline)
+
+
+def _find_timeline(project, name: str):
+    try:
+        count = int(project.GetTimelineCount() or 0)
+    except Exception:
+        return None
+    for i in range(1, count + 1):
+        try:
+            tl = project.GetTimelineByIndex(i)
+        except Exception:
+            continue
+        if tl is not None and tl.GetName() == name:
+            return tl
+    return None
+
+
+def list_timelines(project=None) -> list[str]:
+    """Names of every timeline in the current project (empty list on failure)."""
+    try:
+        if project is None:
+            app = get_resolve()
+            project = app.GetProjectManager().GetCurrentProject()
+        if project is None:
+            return []
+        count = int(project.GetTimelineCount() or 0)
+        names: list[str] = []
+        for i in range(1, count + 1):
+            tl = project.GetTimelineByIndex(i)
+            if tl is not None:
+                names.append(tl.GetName())
+        return names
+    except Exception:
+        return []
+
+
+def current_timeline_name(project=None) -> str:
+    try:
+        if project is None:
+            app = get_resolve()
+            project = app.GetProjectManager().GetCurrentProject()
+        tl = project.GetCurrentTimeline() if project else None
+        return tl.GetName() if tl else ""
+    except Exception:
+        return ""
+
+
+def timeline_fps(ctx: "ResolveContext") -> float:
+    for getter in (
+        lambda: ctx.timeline.GetSetting("timelineFrameRate"),
+        lambda: ctx.project.GetSetting("timelineFrameRate"),
+    ):
+        try:
+            value = float(getter())
+            if value > 0:
+                return value
+        except Exception:
+            continue
+    return 24.0
+
+
+def timeline_range(ctx: "ResolveContext") -> Optional[tuple[int, int]]:
+    """
+    (in, out) frames of the current in/out marks, relative to timeline start.
+
+    Returns None when the timeline has no marks set.
+    """
+    marks = None
+    try:
+        marks = ctx.timeline.GetMarkInOut()
+    except Exception:
+        marks = None
+    if not isinstance(marks, dict):
+        return None
+    for key in ("audio", "video"):
+        part = marks.get(key)
+        if isinstance(part, dict) and part.get("in") is not None:
+            try:
+                start = int(part["in"])
+                end = int(part["out"])
+            except (TypeError, ValueError):
+                continue
+            if end > start:
+                return (start, end)
+    return None
+
 
 
 # --------------------------------------------------------------------------
@@ -271,16 +377,21 @@ def export_timeline_audio(
     progress: Optional[ProgressFn] = None,
     poll_seconds: float = 1.0,
     cancelled: Optional[object] = None,
+    frame_range: Optional[tuple[int, int]] = None,
 ) -> str:
     """
-    Clear the render queue, configure an 'audio only' WAV render of the whole
+    Clear the render queue, configure an 'audio only' WAV render of the
     current timeline and render it into the OS temp directory.
+
+    ``frame_range`` renders only that (in, out) span — used when the user asks
+    to transcribe just the marked part of the timeline.
 
     Cancellation-safe: if the token is tripped while Resolve is rendering, the
     job is stopped, removed from the queue and any partial file is deleted.
 
     Returns the absolute path of the rendered .wav file.
     """
+
 
     def say(msg: str, pct: int) -> None:
         if progress:
@@ -316,9 +427,16 @@ def export_timeline_audio(
         except Exception:
             pass
 
-    say("Configuring WAV (audio only) render…", 6)
+    whole = frame_range is None
+    if whole:
+        say("Configuring WAV (audio only) render…", 6)
+    else:
+        say(
+            f"Configuring WAV render for frames {frame_range[0]}–{frame_range[1]}…",
+            6,
+        )
     settings = {
-        "SelectAllFrames": True,
+        "SelectAllFrames": whole,
         "TargetDir": out_dir,
         "CustomName": base_name,
         "ExportVideo": False,
@@ -329,17 +447,23 @@ def export_timeline_audio(
         "FormatWidth": 1920,           # ignored for audio-only, kept for safety
         "FormatHeight": 1080,
     }
+    if not whole:
+        settings["MarkIn"] = int(frame_range[0])
+        settings["MarkOut"] = int(frame_range[1])
     if not project.SetRenderSettings(settings):
         # Some builds reject unknown keys; retry with a minimal set.
-        project.SetRenderSettings(
-            {
-                "SelectAllFrames": True,
-                "TargetDir": out_dir,
-                "CustomName": base_name,
-                "ExportVideo": False,
-                "ExportAudio": True,
-            }
-        )
+        fallback = {
+            "SelectAllFrames": whole,
+            "TargetDir": out_dir,
+            "CustomName": base_name,
+            "ExportVideo": False,
+            "ExportAudio": True,
+        }
+        if not whole:
+            fallback["MarkIn"] = int(frame_range[0])
+            fallback["MarkOut"] = int(frame_range[1])
+        project.SetRenderSettings(fallback)
+
 
     try:
         project.SetCurrentRenderFormatAndCodec("wav", "lpcm")
