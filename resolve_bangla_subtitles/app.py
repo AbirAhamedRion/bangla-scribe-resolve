@@ -256,9 +256,11 @@ class MainWindow(QWidget):
         h.setObjectName("Hero")
         h.setWordWrap(True)
         p = QLabel(
-            "Exports your active timeline's audio, transcribes it locally with "
-            "faster-whisper, and drops a ready-to-use .srt in the Media Pool."
+            "Pick any timeline — or just its In/Out range — transcribe it "
+            "locally with faster-whisper, and get a styled .srt placed straight "
+            "onto a subtitle track."
         )
+
         p.setObjectName("Muted")
         p.setWordWrap(True)
         col.addWidget(h)
