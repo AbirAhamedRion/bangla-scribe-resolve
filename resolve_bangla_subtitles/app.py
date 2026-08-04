@@ -166,6 +166,9 @@ class MainWindow(QWidget):
         # Restore the previous session's options before any widget is built,
         # so every control can be constructed with its saved value.
         self.settings = settings_store.load()
+        # ~8 x 6 inches at 96 dpi, with a floor that keeps every label readable
+        # instead of elided or clipped.
+        self.setMinimumSize(740, 560)
         self.resize(
             int(self.settings["window"]["w"]), int(self.settings["window"]["h"])
         )
@@ -176,20 +179,36 @@ class MainWindow(QWidget):
 
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(16, 16, 16, 16)
+        outer.setContentsMargins(14, 14, 14, 14)
 
         shell = QFrame()
         shell.setObjectName("Shell")
         outer.addWidget(shell)
 
         root = QVBoxLayout(shell)
-        root.setContentsMargins(24, 18, 24, 22)
-        root.setSpacing(18)
+        root.setContentsMargins(22, 14, 22, 16)
+        root.setSpacing(14)
 
         root.addWidget(self._title_bar())
         root.addWidget(self._hero())
-        root.addWidget(self._settings_card())
-        root.addWidget(self._progress_card(), 1)
+
+        # Everything below the hero scrolls, so shrinking the window never
+        # squashes or overflows the controls — it just reveals a scrollbar.
+        body = QWidget()
+        body_col = QVBoxLayout(body)
+        body_col.setContentsMargins(0, 0, 6, 0)
+        body_col.setSpacing(14)
+        body_col.addWidget(self._settings_card())
+        body_col.addWidget(self._progress_card(), 1)
+
+        scroll = QScrollArea()
+        scroll.setObjectName("Scroller")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setWidget(body)
+        root.addWidget(scroll, 1)
+
         root.addLayout(self._actions())
 
     # -- sections ---------------------------------------------------------
@@ -202,12 +221,19 @@ class MainWindow(QWidget):
 
         close = QPushButton()
         close.setObjectName("WinBtnClose")
+        close.setToolTip("Close")
         close.clicked.connect(self.close)
         mini = QPushButton()
         mini.setObjectName("WinBtnMin")
+        mini.setToolTip("Minimise")
         mini.clicked.connect(self.showMinimized)
+        self.max_btn = QPushButton()
+        self.max_btn.setObjectName("WinBtnMax")
+        self.max_btn.setToolTip("Maximise")
+        self.max_btn.clicked.connect(self._toggle_maximise)
         row.addWidget(close)
         row.addWidget(mini)
+        row.addWidget(self.max_btn)
         row.addStretch(1)
 
         title = QLabel("Bangla Subtitle Studio")
@@ -218,6 +244,7 @@ class MainWindow(QWidget):
         sub = QLabel("for DaVinci Resolve Studio")
         sub.setObjectName("AppSubtitle")
         row.addWidget(sub)
+
         return bar
 
     def _hero(self) -> QWidget:
