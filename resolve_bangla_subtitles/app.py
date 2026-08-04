@@ -519,13 +519,59 @@ class MainWindow(QWidget):
         row.addStretch(1)
         row.addWidget(self.cancel_btn)
         row.addWidget(self.run_btn)
+        grip = QSizeGrip(self)
+        grip.setFixedSize(16, 16)
+        row.addWidget(grip, 0, Qt.AlignmentFlag.AlignBottom)
         return row
 
     # -- behaviour --------------------------------------------------------
+    def _toggle_maximise(self) -> None:
+        if self.isMaximized():
+            self.showNormal()
+            self.max_btn.setToolTip("Maximise")
+        else:
+            self.showMaximized()
+            self.max_btn.setToolTip("Restore")
+
+    def _refresh_timelines(self) -> None:
+        """List every timeline in the open project so any of them can be run."""
+        import resolve_api  # imported lazily: Resolve may not be running yet
+
+        try:
+            names = resolve_api.list_timelines()
+            current = resolve_api.current_timeline_name()
+        except Exception:
+            names, current = [], ""
+
+        saved = self.settings.get("timeline") or ""
+        self.timeline_box.blockSignals(True)
+        self.timeline_box.clear()
+        if names:
+            self.timeline_box.addItems(names)
+            pick = saved if saved in names else (current or names[0])
+            self.timeline_box.setCurrentText(pick)
+            self.timeline_box.setEnabled(True)
+            self.timeline_hint.setText(
+                f"{len(names)} timeline{'s' if len(names) != 1 else ''} found. "
+                "Pick one, or mark In/Out in Resolve to caption just part of it."
+            )
+        else:
+            self.timeline_box.addItem("Use the timeline open in Resolve")
+            self.timeline_box.setEnabled(False)
+            self.timeline_hint.setText(
+                "Resolve is not reachable yet — open your project and press "
+                "Refresh. The currently open timeline is used meanwhile."
+            )
+        self.timeline_box.blockSignals(False)
+
+    def _selected_timeline(self) -> str:
+        return self.timeline_box.currentText() if self.timeline_box.isEnabled() else ""
+
     def _choose_dir(self) -> None:
         d = QFileDialog.getExistingDirectory(self, "Choose SRT folder", self.out_value.text())
         if d:
             self.out_value.setText(d)
+
 
     def _refresh_cache(self) -> None:
         """Show whether the selected model is already on disk."""
