@@ -31,9 +31,13 @@ DEFAULTS: Dict[str, Any] = {
     "max_lines": 2,
     "place": True,
     "reuse_transcript": True,
+    "timeline": "",
+    "use_in_out": False,
     "output_dir": "",
-    "window": {"w": 620, "h": 640},
+    # ~8 x 6 inches at 96 dpi.
+    "window": {"w": 800, "h": 600},
 }
+
 
 _MODELS = ("large-v3", "medium", "small")
 
