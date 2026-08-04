@@ -427,9 +427,16 @@ def export_timeline_audio(
         except Exception:
             pass
 
-    say("Configuring WAV (audio only) render…", 6)
+    whole = frame_range is None
+    if whole:
+        say("Configuring WAV (audio only) render…", 6)
+    else:
+        say(
+            f"Configuring WAV render for frames {frame_range[0]}–{frame_range[1]}…",
+            6,
+        )
     settings = {
-        "SelectAllFrames": True,
+        "SelectAllFrames": whole,
         "TargetDir": out_dir,
         "CustomName": base_name,
         "ExportVideo": False,
@@ -440,17 +447,23 @@ def export_timeline_audio(
         "FormatWidth": 1920,           # ignored for audio-only, kept for safety
         "FormatHeight": 1080,
     }
+    if not whole:
+        settings["MarkIn"] = int(frame_range[0])
+        settings["MarkOut"] = int(frame_range[1])
     if not project.SetRenderSettings(settings):
         # Some builds reject unknown keys; retry with a minimal set.
-        project.SetRenderSettings(
-            {
-                "SelectAllFrames": True,
-                "TargetDir": out_dir,
-                "CustomName": base_name,
-                "ExportVideo": False,
-                "ExportAudio": True,
-            }
-        )
+        fallback = {
+            "SelectAllFrames": whole,
+            "TargetDir": out_dir,
+            "CustomName": base_name,
+            "ExportVideo": False,
+            "ExportAudio": True,
+        }
+        if not whole:
+            fallback["MarkIn"] = int(frame_range[0])
+            fallback["MarkOut"] = int(frame_range[1])
+        project.SetRenderSettings(fallback)
+
 
     try:
         project.SetCurrentRenderFormatAndCodec("wav", "lpcm")
