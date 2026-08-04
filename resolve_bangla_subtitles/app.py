@@ -271,9 +271,45 @@ class MainWindow(QWidget):
         col.setContentsMargins(20, 18, 20, 18)
         col.setSpacing(14)
 
+        src_head = QLabel("Source")
+        src_head.setObjectName("CardTitle")
+        col.addWidget(src_head)
+
+        tl_row = QHBoxLayout()
+        tl_row.setSpacing(12)
+        tl_lbl = QLabel("Timeline")
+        tl_lbl.setObjectName("Muted")
+        self.timeline_box = QComboBox()
+        self.timeline_box.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
+        self.timeline_box.setMinimumContentsLength(18)
+        refresh_btn = QPushButton("Refresh")
+        refresh_btn.setObjectName("Ghost")
+        refresh_btn.clicked.connect(self._refresh_timelines)
+        tl_row.addWidget(tl_lbl)
+        tl_row.addWidget(self.timeline_box, 1)
+        tl_row.addWidget(refresh_btn)
+        col.addLayout(tl_row)
+
+        self.inout_check = QCheckBox(
+            "Transcribe only the In/Out range marked on that timeline"
+        )
+        self.inout_check.setChecked(bool(self.settings.get("use_in_out", False)))
+        col.addWidget(self.inout_check)
+
+        self.timeline_hint = QLabel()
+        self.timeline_hint.setObjectName("Muted")
+        self.timeline_hint.setWordWrap(True)
+        col.addWidget(self.timeline_hint)
+        self._refresh_timelines()
+
+        col.addWidget(divider())
+
         head = QLabel("Engine")
         head.setObjectName("CardTitle")
         col.addWidget(head)
+
 
         row = QHBoxLayout()
         row.setSpacing(12)
