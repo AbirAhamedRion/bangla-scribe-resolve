@@ -188,3 +188,61 @@ Blackmagic ships (`DaVinci Resolve`, `DaVinci Resolve Studio`,
 Program Files roots, `/Library/Application Support`, per-user macOS paths and
 `/opt/resolve`, and auto-fills `RESOLVE_SCRIPT_API` / `RESOLVE_SCRIPT_LIB` from
 the first candidate that exists.
+
+
+## Choosing which timeline (and how much of it) to transcribe
+
+The **Source** section at the top of the window lists every timeline in the
+open project:
+
+- **Timeline** — pick any timeline, not just the one currently open. The
+  selection is made current in Resolve before rendering, and it is remembered
+  for next launch. Press **Refresh** after creating or renaming timelines.
+- **Transcribe only the In/Out range** — mark In (`I`) and Out (`O`) in Resolve
+  and only that span is rendered and transcribed. Cue timestamps are shifted by
+  the In point, so the subtitles still land at the right place on the full
+  timeline. If no marks are set, the run stops with a clear message instead of
+  silently captioning everything.
+
+Partial runs are cached separately from full-timeline runs, so a range and the
+whole timeline never overwrite each other's transcripts.
+
+
+## Window and layout
+
+- Default window is roughly 8 × 6 inches (800 × 600 px at 96 dpi) with a
+  740 × 560 minimum, so no label ever elides or overflows.
+- Full window controls: **close**, **minimise** and **maximise/restore** in the
+  macOS-style traffic-light cluster, plus a bottom-right size grip and drag
+  anywhere on the frame.
+- The settings and progress area scrolls, so shrinking the window reveals a
+  scrollbar instead of squashing the controls.
+
+
+## Turning it into a desktop application
+
+The app is already a standalone desktop window. To ship it as a
+double-clickable executable (no Python required on the target machine):
+
+```bash
+pip install pyinstaller
+python build_desktop.py
+```
+
+Output lands in `dist/`:
+
+| OS | Result |
+|---|---|
+| Windows | `dist/BanglaSubtitleStudio.exe` |
+| macOS | `dist/BanglaSubtitleStudio.app` |
+| Linux | `dist/BanglaSubtitleStudio` |
+
+Notes:
+
+- Build on the OS you want to ship for — PyInstaller does not cross-compile.
+- Whisper weights are not bundled; they download once on first run into the
+  model cache, so the executable stays a few hundred MB rather than several GB.
+- Drop an `icon.ico` (Windows) or `icon.icns` (macOS) next to `app.py` before
+  building to brand the executable.
+- The user still needs DaVinci Resolve installed with **Preferences → System →
+  General → External scripting using = Local**.
